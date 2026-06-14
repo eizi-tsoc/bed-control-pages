@@ -109,7 +109,9 @@ async function initPyodide() {
     setProgress(20);
     pyodide = await loadPyodide();
     setProgress(60);
-    await pyodide.loadPackage(['openpyxl']);
+    await pyodide.loadPackage('micropip');
+    const micropip = pyodide.pyimport('micropip');
+    await micropip.install('openpyxl');
     setProgress(100);
     document.getElementById('initMsg').textContent = '✅ Python環境の準備完了';
     document.getElementById('initMsg').style.color = '#1e7e34';
