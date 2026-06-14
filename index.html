@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>病床稼働率レポート生成</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f0f4f8; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .card { background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); padding: 40px; width: 100%; max-width: 520px; }
+  h1 { color: #2c5f8a; font-size: 22px; margin-bottom: 6px; }
+  .subtitle { color: #888; font-size: 13px; margin-bottom: 30px; }
+  .section { margin-bottom: 24px; }
+  label { display: block; font-size: 13px; font-weight: bold; color: #444; margin-bottom: 8px; }
+  .upload-area { border: 2px dashed #b0c8e0; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.2s; background: #f8fbff; }
+  .upload-area:hover { border-color: #2c5f8a; background: #eef4fb; }
+  .upload-area.dragover { border-color: #2c5f8a; background: #ddeeff; }
+  .upload-icon { font-size: 36px; margin-bottom: 10px; }
+  .upload-text { color: #666; font-size: 14px; }
+  .upload-text span { color: #2c5f8a; font-weight: bold; }
+  .file-name { margin-top: 10px; font-size: 13px; color: #2c5f8a; font-weight: bold; }
+  select { width: 100%; padding: 10px 14px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; color: #333; background: white; }
+  .btn { width: 100%; padding: 14px; background: #2c5f8a; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+  .btn:hover { background: #1e4a6e; }
+  .btn:disabled { background: #aaa; cursor: not-allowed; }
+  .status { margin-top: 20px; padding: 14px; border-radius: 8px; font-size: 14px; display: none; }
+  .status.info    { background: #e8f0fe; color: #2c5f8a; display: block; }
+  .status.success { background: #e6f4ea; color: #1e7e34; display: block; }
+  .status.error   { background: #fde8e8; color: #c0392b; display: block; }
+  .legend { display: flex; gap: 12px; font-size: 12px; margin-top: 8px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .dot { width: 12px; height: 12px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🏥 病床稼働率レポート生成</h1>
+  <p class="subtitle">Excelファイルをアップロードして稼働率レポートを生成します</p>
+
+  <div class="section">
+    <label>① Excelファイルを選択</label>
+    <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">📂</div>
+      <div class="upload-text"><span>クリック</span>またはファイルをドラッグ＆ドロップ</div>
+      <div class="file-name" id="fileName">ファイルが選択されていません</div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx" style="display:none">
+  </div>
+
+  <div class="section">
+    <label>② 処理する年を選択</label>
+    <select id="yearSelect">
+      <option value="auto">自動検出（最も多い年）</option>
+      <option value="2025">2025年</option>
+      <option value="2026">2026年</option>
+      <option value="2027">2027年</option>
+      <option value="2028">2028年</option>
+    </select>
+  </div>
+
+  <div class="section">
+    <label>③ 色の凡例</label>
+    <div class="legend">
+      <div class="legend-item"><div class="dot" style="background:#FF99CC"></div>女性（F）</div>
+      <div class="legend-item"><div class="dot" style="background:#9DC3E6"></div>男性（M）</div>
+      <div class="legend-item"><div class="dot" style="background:#ED7D31"></div>入退院同日（O）</div>
+    </div>
+  </div>
+
+  <button class="btn" id="generateBtn" onclick="generateReport()" disabled>レポートを生成してダウンロード</button>
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+const PINK   = 'FFFFCCFF';
+const BLUE   = 'FFDDEBF7';
+const ORANGE = 'FFED7D31';
+const TOTAL_BEDS = 19;
+const WEEKDAYS = ['日','月','火','水','木','金','土'];
+const ROOM_MAP = {
+  3:'302', 5:'303', 7:'305', 9:'301', 11:'304',
+  13:'201', 15:'306',
+  17:'307-3', 18:'307-4', 19:'307-1', 20:'307-5', 21:'307-2',
+  23:'308-3', 24:'308-1', 25:'308-4', 26:'308-2',
+  28:'202-1', 29:'202-3', 30:'202-2'
+};
+const ROOM_TYPE = {
+  '301':'1人部屋個室','302':'1人部屋個室','303':'1人部屋個室',
+  '304':'1人部屋個室','305':'1人部屋個室','306':'1人部屋個室','201':'1人部屋個室',
+  '307-1':'307(5人部屋)','307-2':'307(5人部屋)','307-3':'307(5人部屋)',
+  '307-4':'307(5人部屋)','307-5':'307(5人部屋)',
+  '308-1':'308(4人部屋)','308-2':'308(4人部屋)',
+  '308-3':'308(4人部屋)','308-4':'308(4人部屋)',
+  '202-1':'202(3人部屋)','202-2':'202(3人部屋)','202-3':'202(3人部屋)'
+};
+
+let workbookData = null;
+
+// ファイル選択
+document.getElementById('fileInput').addEventListener('change', e => {
+  loadFile(e.target.files[0]);
+});
+const area = document.getElementById('uploadArea');
+area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
+area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+area.addEventListener('drop', e => {
+  e.preventDefault(); area.classList.remove('dragover');
+  loadFile(e.dataTransfer.files[0]);
+});
+
+function loadFile(file) {
+  if (!file) return;
+  document.getElementById('fileName').textContent = file.name;
+  setStatus('info', 'ファイル読み込み中...');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      workbookData = new Uint8Array(e.target.result);
+      document.getElementById('generateBtn').disabled = false;
+      setStatus('info', 'ファイル読み込み完了。「レポートを生成」をクリックしてください。');
+    } catch(err) {
+      setStatus('error', 'ファイルの読み込みに失敗しました: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function setStatus(type, msg) {
+  const el = document.getElementById('status');
+  el.className = 'status ' + type;
+  el.textContent = msg;
+}
+
+function excelDateToJS(serial) {
+  return new Date(Math.round((serial - 25569) * 86400 * 1000));
+}
+
+function getCellColor(ws, row, col) {
+  const addr = XLSX.utils.encode_cell({r: row-1, c: col-1});
+  const cell = ws[addr];
+  if (!cell) return null;
+  const fill = cell.s && cell.s.fgColor;
+  if (!fill) return null;
+  if (fill.rgb) return 'FF' + fill.rgb.toUpperCase();
+  return null;
+}
+
+function occFill(pct) {
+  if (pct >= 90) return 'FFFFC7CE';
+  if (pct >= 70) return 'FFFFEB9C';
+  return 'FFC6EFCE';
+}
+
+function generateReport() {
+  if (!workbookData) return;
+  setStatus('info', '処理中...');
+  document.getElementById('generateBtn').disabled = true;
+
+  setTimeout(() => {
+    try {
+      const wb_src = XLSX.read(workbookData, {type:'array', cellStyles:true});
+
+      // 病床シートを検索
+      const sheetName = wb_src.SheetNames.find(n => n.includes('病床'));
+      if (!sheetName) throw new Error('病床シートが見つかりません');
+      const ws_src = wb_src.Sheets[sheetName];
+      const range = XLSX.utils.decode_range(ws_src['!ref']);
+
+      // 日付読み込み（1行目）
+      const dateMap = {}; // col -> Date
+      const yearCount = {};
+      for (let c = 1; c <= range.e.c; c++) {
+        const cell = ws_src[XLSX.utils.encode_cell({r:0, c})];
+        if (cell && cell.t === 'n' && cell.v > 40000) {
+          const d = excelDateToJS(cell.v);
+          if (d.getFullYear() > 2020) {
+            dateMap[c] = d;
+            const y = d.getFullYear();
+            yearCount[y] = (yearCount[y]||0) + 1;
+          }
+        }
+      }
+
+      // 年の決定
+      let targetYear;
+      const selectedYear = document.getElementById('yearSelect').value;
+      if (selectedYear === 'auto') {
+        targetYear = parseInt(Object.entries(yearCount).sort((a,b)=>b[1]-a[1])[0][0]);
+      } else {
+        targetYear = parseInt(selectedYear);
+      }
+
+      // 対象日付を抽出・ソート
+      const targetDates = Object.entries(dateMap)
+        .filter(([c, d]) => d.getFullYear() === targetYear)
+        .sort((a, b) => a[1] - b[1]);
+      const colByDate = {};
+      targetDates.forEach(([c, d]) => colByDate[d.toDateString()] = parseInt(c));
+      const dates = targetDates.map(([c, d]) => d);
+
+      // セル色読み込み
+      const bedDayColor = {};
+      Object.entries(ROOM_MAP).forEach(([rowNum, bedId]) => {
+        dates.forEach(dt => {
+          const c = colByDate[dt.toDateString()];
+          if (c === undefined) return;
+          const color = getCellColor(ws_src, parseInt(rowNum), c + 1);
+          if (color === PINK)   bedDayColor[bedId+'|'+dt.toDateString()] = 'female';
+          else if (color === BLUE)   bedDayColor[bedId+'|'+dt.toDateString()] = 'male';
+          else if (color === ORANGE) bedDayColor[bedId+'|'+dt.toDateString()] = 'orange';
+          else bedDayColor[bedId+'|'+dt.toDateString()] = null;
+        });
+      });
+
+      const getColor = (bedId, dt) => dt ? bedDayColor[bedId+'|'+dt.toDateString()] : null;
+      const allBeds = Object.values(ROOM_MAP);
+
+      // 日次集計
+      const stats = {};
+      dates.forEach(dt => {
+        stats[dt.toDateString()] = {
+          dt, total:0, male:0, female:0,
+          admissions:0, discharges:0,
+          admit_male:0, admit_female:0,
+          discharge_male:0, discharge_female:0
+        };
+      });
+
+      allBeds.forEach(bedId => {
+        dates.forEach((dt, i) => {
+          const cur  = getColor(bedId, dt);
+          const prev = i > 0 ? getColor(bedId, dates[i-1]) : null;
+          const nxt  = i < dates.length-1 ? getColor(bedId, dates[i+1]) : null;
+          const s = stats[dt.toDateString()];
+
+          if (['female','male','orange'].includes(cur)) s.total++;
+
+          if (cur === 'orange') {
+            s.admissions++; s.discharges++;
+            if (prev === 'female') s.discharge_female++;
+            else if (prev === 'male') s.discharge_male++;
+            if (nxt === 'female') s.admit_female++;
+            else if (nxt === 'male') s.admit_male++;
+          }
+          if (['female','male'].includes(cur) && !['female','male','orange'].includes(prev)) {
+            s.admissions++;
+            if (cur === 'female') s.admit_female++; else s.admit_male++;
+          }
+          if (['female','male'].includes(prev) && !['female','male','orange'].includes(cur)) {
+            const ps = stats[dates[i-1].toDateString()];
+            ps.discharges++;
+            if (prev === 'female') ps.discharge_female++; else ps.discharge_male++;
+          }
+        });
+      });
+
+      // 男女再集計
+      dates.forEach((dt, i) => {
+        const s = stats[dt.toDateString()];
+        s.male = 0; s.female = 0;
+        allBeds.forEach(bedId => {
+          const cur = getColor(bedId, dt);
+          const nxt = i < dates.length-1 ? getColor(bedId, dates[i+1]) : null;
+          if (cur === 'female') s.female++;
+          else if (cur === 'male') s.male++;
+          else if (cur === 'orange') {
+            if (nxt === 'female') s.female++;
+            else if (nxt === 'male') s.male++;
+          }
+        });
+      });
+
+      // 月別グループ
+      const months = {};
+      dates.forEach(dt => {
+        const key = `${dt.getFullYear()}-${dt.getMonth()+1}`;
+        if (!months[key]) months[key] = {year: dt.getFullYear(), month: dt.getMonth()+1, dates:[]};
+        months[key].dates.push(dt);
+      });
+
+      // 出力ワークブック作成
+      const wb_out = XLSX.utils.book_new();
+
+      // ヘルパー
+      const H = (color) => ({patternType:'solid', fgColor:{rgb: color.replace('FF','')}});
+      const HEADER_BG = '4472C4';
+      const SUBHDR_BG = 'D9E1F2';
+
+      // 月別シート
+      Object.values(months).forEach(({year, month, dates: dayList}) => {
+        const ws = {};
+        const allBedsList = allBeds;
+        const nDays = dayList.length;
+
+        const DATE_ROW = 2, WD_ROW = 3, BED_START = 4;
+        const BED_END = BED_START + allBedsList.length - 1;
+        const MALE_ROW = BED_END + 2, FEM_ROW = MALE_ROW + 1;
+        const ADM_ROW = FEM_ROW + 1, DIS_ROW = ADM_ROW + 1, OCC_ROW = DIS_ROW + 1;
+
+        const setCell = (r, c, v, s={}) => {
+          const addr = XLSX.utils.encode_cell({r:r-1, c:c-1});
+          ws[addr] = {v, t: typeof v === 'number' ? 'n' : 's', s};
+        };
+
+        const merges = [];
+
+        // タイトル
+        setCell(1, 1, `${year}年${month}月 病床稼働状況`, {font:{bold:true,sz:14,color:{rgb:'FFFFFF'}}, fill:H(HEADER_BG), alignment:{horizontal:'center'}});
+        merges.push({s:{r:0,c:0}, e:{r:0,c:1+nDays}});
+
+        // 日付・曜日ヘッダー
+        setCell(DATE_ROW, 1, '部屋番号', {font:{bold:true}, fill:H(SUBHDR_BG), alignment:{horizontal:'center'}});
+        setCell(DATE_ROW, 2, 'タイプ',   {font:{bold:true}, fill:H(SUBHDR_BG), alignment:{horizontal:'center'}});
+        setCell(WD_ROW,   1, '部屋番号', {font:{bold:true}, fill:H(SUBHDR_BG), alignment:{horizontal:'center'}});
+        setCell(WD_ROW,   2, 'タイプ',   {font:{bold:true}, fill:H(SUBHDR_BG), alignment:{horizontal:'center'}});
+
+        dayList.forEach((dt, j) => {
+          const col = 3 + j;
+          const mm = String(dt.getMonth()+1).padStart(2,'0');
+          const dd = String(dt.getDate()).padStart(2,'0');
+          setCell(DATE_ROW, col, `${mm}/${dd}`, {font:{bold:true,sz:9}, fill:H(SUBHDR_BG), alignment:{horizontal:'center'}});
+          const wd = WEEKDAYS[dt.getDay()];
+          const wdBg = wd==='土' ? 'BDD7EE' : wd==='日' ? 'FCE4D6' : SUBHDR_BG;
+          setCell(WD_ROW, col, wd, {font:{bold:true,sz:9}, fill:H(wdBg), alignment:{horizontal:'center'}});
+        });
+
+        // ベッド行
+        allBedsList.forEach((bedId, bi) => {
+          const row = BED_START + bi;
+          setCell(row, 1, bedId,                    {font:{bold:true,sz:9}, fill:H(SUBHDR_BG), alignment:{horizontal:'center'}});
+          setCell(row, 2, ROOM_TYPE[bedId]||'',     {font:{sz:9},           fill:H(SUBHDR_BG), alignment:{horizontal:'center'}});
+          dayList.forEach((dt, j) => {
+            const col = 3 + j;
+            const cur = getColor(bedId, dt);
+            let bg = 'FFFFFF', val = '';
+            if (cur === 'female') { bg = 'FF99CC'; val = 'F'; }
+            else if (cur === 'male')   { bg = '9DC3E6'; val = 'M'; }
+            else if (cur === 'orange') { bg = 'ED7D31'; val = 'O'; }
+            setCell(row, col, val, {font:{sz:8,bold:!!cur}, fill:H(bg), alignment:{horizontal:'center'}});
+          });
+        });
+
+        // 集計行
+        const summaryDefs = [
+          [MALE_ROW, '当日の男性患者数', 'male',       'D6E4F7'],
+          [FEM_ROW,  '当日の女性患者数', 'female',     'FFE0EF'],
+          [ADM_ROW,  '当日の入院実数',   'admissions', 'E2EFDA'],
+          [DIS_ROW,  '当日の退院実数',   'discharges', 'FFE699'],
+        ];
+        summaryDefs.forEach(([row, label, key, bg]) => {
+          setCell(row, 1, label, {font:{bold:true,sz:9}, fill:H(SUBHDR_BG), alignment:{horizontal:'center'}});
+          merges.push({s:{r:row-1,c:0}, e:{r:row-1,c:1}});
+          dayList.forEach((dt, j) => {
+            setCell(row, 3+j, stats[dt.toDateString()][key], {font:{sz:9}, fill:H(bg), alignment:{horizontal:'center'}});
+          });
+        });
+
+        setCell(OCC_ROW, 1, 'ベッド稼働率', {font:{bold:true,sz:9}, fill:H(SUBHDR_BG), alignment:{horizontal:'center'}});
+        merges.push({s:{r:OCC_ROW-1,c:0}, e:{r:OCC_ROW-1,c:1}});
+        dayList.forEach((dt, j) => {
+          const pct = Math.round(stats[dt.toDateString()].total / TOTAL_BEDS * 1000) / 10;
+          setCell(OCC_ROW, 3+j, `${pct}%`, {font:{bold:true,sz:9}, fill:H(occFill(pct).replace('FF','')), alignment:{horizontal:'center'}});
+        });
+
+        ws['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:OCC_ROW, c:2+nDays}});
+        ws['!merges'] = merges;
+        ws['!cols'] = [{wch:10},{wch:14},...Array(nDays).fill({wch:5})];
+        XLSX.utils.book_append_sheet(wb_out, ws, `${month}月`);
+      });
+
+      // 総合サマリーシート
+      const ws_sum = {};
+      const sumMerges = [];
+      const setS = (r, c, v, s={}) => {
+        const addr = XLSX.utils.encode_cell({r:r-1,c:c-1});
+        ws_sum[addr] = {v, t: typeof v==='number'?'n':'s', s};
+      };
+
+      setS(1,1,`病床稼働 総合サマリー（${targetYear}年）`,{font:{bold:true,sz:14,color:{rgb:'FFFFFF'}},fill:H(HEADER_BG),alignment:{horizontal:'center'}});
+      sumMerges.push({s:{r:0,c:0},e:{r:0,c:8}});
+      setS(2,1,'■ 月別サマリー',{font:{bold:true}});
+      ['月','日数','平均患者数','平均男性','平均女性','平均入院数','平均退院数','平均稼働率','月間稼働率'].forEach((h,i)=>{
+        setS(3,i+1,h,{font:{bold:true,sz:10},fill:H(SUBHDR_BG),alignment:{horizontal:'center'}});
+      });
+
+      Object.values(months).forEach(({month, dates: dayList}, mi) => {
+        const sl = dayList.map(dt => stats[dt.toDateString()]);
+        const n = sl.length;
+        const avg = k => Math.round(sl.reduce((a,s)=>a+s[k],0)/n*10)/10;
+        const avgOcc = Math.round(avg('total')/TOTAL_BEDS*1000)/10;
+        const monOcc = Math.round(sl.reduce((a,s)=>a+s.total,0)/(n*TOTAL_BEDS)*1000)/10;
+        const row = 4 + mi;
+        [f`${month}月`, n, avg('total'), avg('male'), avg('female'), avg('admissions'), avg('discharges'), `${avgOcc}%`, `${monOcc}%`].forEach((v,i)=>{
+          const s = i>=7 ? {font:{sz:10},fill:H(occFill(parseFloat(v)).replace('FF','')),alignment:{horizontal:'center'}} : {font:{sz:10},alignment:{horizontal:'center'}};
+          setS(row,i+1,v,s);
+        });
+      });
+
+      const wdStart = 4 + Object.keys(months).length + 2;
+      setS(wdStart-1,1,'■ 曜日別サマリー（全期間平均）',{font:{bold:true}});
+      ['曜日','件数(日)','平均患者数','平均男性','平均女性','合計入院数','合計退院数','平均稼働率'].forEach((h,i)=>{
+        setS(wdStart,i+1,h,{font:{bold:true,sz:10},fill:H(SUBHDR_BG),alignment:{horizontal:'center'}});
+      });
+
+      ['月','火','水','木','金','土','日'].forEach((wd, ri) => {
+        const sl = dates.filter(dt=>WEEKDAYS[dt.getDay()]===wd).map(dt=>stats[dt.toDateString()]);
+        const n = sl.length;
+        const avg = k => Math.round(sl.reduce((a,s)=>a+s[k],0)/n*10)/10;
+        const avgOcc = Math.round(avg('total')/TOTAL_BEDS*1000)/10;
+        const bg = wd==='土'?'D9E1F2':wd==='日'?'FCE4D6':null;
+        const row = wdStart + 1 + ri;
+        [wd, n, avg('total'), avg('male'), avg('female'),
+         sl.reduce((a,s)=>a+s.admissions,0), sl.reduce((a,s)=>a+s.discharges,0), `${avgOcc}%`].forEach((v,i)=>{
+          const s = {font:{sz:10},alignment:{horizontal:'center'}};
+          if (bg) s.fill = H(bg);
+          setS(row,i+1,v,s);
+        });
+      });
+
+      ws_sum['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:wdStart+7,c:8}});
+      ws_sum['!merges'] = sumMerges;
+      ws_sum['!cols'] = [{wch:8},{wch:10},{wch:12},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12}];
+      XLSX.utils.book_append_sheet(wb_out, ws_sum, '総合サマリー');
+
+      // 部屋別稼働シート
+      const ws_room = {};
+      const setR = (r,c,v,s={}) => { ws_room[XLSX.utils.encode_cell({r:r-1,c:c-1})]={v,t:typeof v==='number'?'n':'s',s}; };
+      setR(1,1,'部屋別稼働状況（全期間）',{font:{bold:true,sz:13,color:{rgb:'FFFFFF'}},fill:H(HEADER_BG),alignment:{horizontal:'center'}});
+      ['部屋番号','タイプ','総ベッド数','稼働日数','稼働率(%)'].forEach((h,i)=>{
+        setR(2,i+1,h,{font:{bold:true,sz:10},fill:H(SUBHDR_BG),alignment:{horizontal:'center'}});
+      });
+      allBeds.forEach((bedId,bi)=>{
+        const occ = dates.filter(dt=>getColor(bedId,dt)!==null).length;
+        const pct = Math.round(occ/dates.length*1000)/10;
+        [bedId,ROOM_TYPE[bedId]||'',1,occ,`${pct}%`].forEach((v,i)=>{
+          const s = i===4 ? {font:{sz:10},fill:H(occFill(pct).replace('FF','')),alignment:{horizontal:'center'}} : {font:{sz:10},alignment:{horizontal:'center'}};
+          setR(3+bi,i+1,v,s);
+        });
+      });
+      ws_room['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:2+allBeds.length,c:4}});
+      ws_room['!cols'] = [{wch:10},{wch:16},{wch:10},{wch:10},{wch:12}];
+      XLSX.utils.book_append_sheet(wb_out, ws_room, '部屋別稼働');
+
+      // ダウンロード
+      const today = new Date();
+      const dateStr = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+      XLSX.writeFile(wb_out, `病床稼働率レポート_${targetYear}_${dateStr}.xlsx`);
+
+      setStatus('success', `✅ レポート生成完了！ダウンロードを確認してください。`);
+      document.getElementById('generateBtn').disabled = false;
+
+    } catch(err) {
+      setStatus('error', 'エラーが発生しました: ' + err.message);
+      document.getElementById('generateBtn').disabled = false;
+    }
+  }, 100);
+}
+</script>
+</body>
+</html>
