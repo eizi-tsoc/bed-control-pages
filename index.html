@@ -391,7 +391,7 @@ function generateReport() {
         const avgOcc = Math.round(avg('total')/TOTAL_BEDS*1000)/10;
         const monOcc = Math.round(sl.reduce((a,s)=>a+s.total,0)/(n*TOTAL_BEDS)*1000)/10;
         const row = 4 + mi;
-        [f`${month}月`, n, avg('total'), avg('male'), avg('female'), avg('admissions'), avg('discharges'), `${avgOcc}%`, `${monOcc}%`].forEach((v,i)=>{
+        [`${month}月`, n, avg('total'), avg('male'), avg('female'), avg('admissions'), avg('discharges'), `${avgOcc}%`, `${monOcc}%`].forEach((v,i)=>{
           const s = i>=7 ? {font:{sz:10},fill:H(occFill(parseFloat(v)).replace('FF','')),alignment:{horizontal:'center'}} : {font:{sz:10},alignment:{horizontal:'center'}};
           setS(row,i+1,v,s);
         });
