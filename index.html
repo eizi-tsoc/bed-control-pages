@@ -195,40 +195,78 @@ from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.chart import LineChart, BarChart, Reference
 
+PINK='FFFFCCFF'; BLUE='FFDDEBF7'; ORANGE='FFED7D31'; TOTAL_BEDS=19
+WEEKDAYS={0:'月',1:'火',2:'水',3:'木',4:'金',5:'土',6:'日'}
+ROOM_TYPE={
+    '301':'1人部屋個室','302':'1人部屋個室','303':'1人部屋個室',
+    '304':'1人部屋個室','305':'1人部屋個室','306':'1人部屋個室','201':'1人部屋個室',
+    '307-1':'307(5人部屋)','307-2':'307(5人部屋)','307-3':'307(5人部屋)',
+    '307-4':'307(5人部屋)','307-5':'307(5人部屋)',
+    '308-1':'308(4人部屋)','308-2':'308(4人部屋)',
+    '308-3':'308(4人部屋)','308-4':'308(4人部屋)',
+    '202-1':'202(3人部屋)','202-2':'202(3人部屋)','202-3':'202(3人部屋)',
+}
+
+def fill(color): return PatternFill('solid', fgColor=color)
+def bdr():
+    s=Side(style='thin')
+    return Border(left=s,right=s,top=s,bottom=s)
+def occ_fill(pct):
+    if pct>=90: return fill('FFFFC7CE')
+    if pct>=70: return fill('FFFFEB9C')
+    return fill('FFC6EFCE')
+HEADER_BG='FF4472C4'; SUBHDR_BG='FFD9E1F2'
+
+def detect_room_id(val):
+    if not val: return None
+    import unicodedata
+    v=unicodedata.normalize('NFKC',str(val))
+    patterns=[
+        (r'307.{0,3}3','307-3'),(r'307.{0,3}4','307-4'),(r'307.{0,3}1','307-1'),
+        (r'307.{0,3}5','307-5'),(r'307.{0,3}2','307-2'),
+        (r'308.{0,3}3','308-3'),(r'308.{0,3}1','308-1'),(r'308.{0,3}4','308-4'),(r'308.{0,3}2','308-2'),
+        (r'202.{0,3}1','202-1'),(r'202.{0,3}3','202-3'),(r'202.{0,3}2','202-2'),
+        (r'306','306'),(r'305','305'),(r'304','304'),(r'303','303'),(r'302','302'),(r'301','301'),
+        (r'201','201'),
+    ]
+    for pat,rid in patterns:
+        if re.search(pat,v): return rid
+    return None
+
 _NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
 
 def _vt(text, sz=1100):
     return ('<title><tx><rich>'
-            '<a:bodyPr ' + _NS + ' rot="-5400000"/><a:lstStyle ' + _NS + '/>'
-            '<a:p ' + _NS + '><a:pPr><a:defRPr sz="' + str(sz) + '"/></a:pPr>'
-            '<a:r><a:rPr sz="' + str(sz) + '"/><a:t>' + text + '</a:t></a:r></a:p>'
+            '<a:bodyPr '+_NS+' rot="-5400000"/><a:lstStyle '+_NS+'/>'
+            '<a:p '+_NS+'><a:pPr><a:defRPr sz="'+str(sz)+'"/></a:pPr>'
+            '<a:r><a:rPr sz="'+str(sz)+'"/><a:t>'+text+'</a:t></a:r></a:p>'
             '</rich></tx><overlay val="0"/></title>')
 
 def _ht(text, sz=1100):
     return ('<title><tx><rich>'
-            '<a:bodyPr ' + _NS + '/><a:lstStyle ' + _NS + '/>'
-            '<a:p ' + _NS + '><a:pPr><a:defRPr sz="' + str(sz) + '"/></a:pPr>'
-            '<a:r><a:rPr sz="' + str(sz) + '"/><a:t>' + text + '</a:t></a:r></a:p>'
+            '<a:bodyPr '+_NS+'/><a:lstStyle '+_NS+'/>'
+            '<a:p '+_NS+'><a:pPr><a:defRPr sz="'+str(sz)+'"/></a:pPr>'
+            '<a:r><a:rPr sz="'+str(sz)+'"/><a:t>'+text+'</a:t></a:r></a:p>'
             '</rich></tx><overlay val="0"/></title>')
 
 def _ct(text, sz=1400):
     return ('<title><tx><rich>'
-            '<a:bodyPr ' + _NS + '/><a:lstStyle ' + _NS + '/>'
-            '<a:p ' + _NS + '><a:pPr><a:defRPr sz="' + str(sz) + '" b="1"/></a:pPr>'
-            '<a:r><a:rPr sz="' + str(sz) + '" b="1"/><a:t>' + text + '</a:t></a:r></a:p>'
+            '<a:bodyPr '+_NS+'/><a:lstStyle '+_NS+'/>'
+            '<a:p '+_NS+'><a:pPr><a:defRPr sz="'+str(sz)+'" b="1"/></a:pPr>'
+            '<a:r><a:rPr sz="'+str(sz)+'" b="1"/><a:t>'+text+'</a:t></a:r></a:p>'
             '</rich></tx><overlay val="0"/></title>')
 
 def fix_chart_xml(xml, title, x_title, left_max=15, right_max=110):
     if '<chart><plotArea>' in xml:
-        xml = xml.replace('<chart><plotArea>', '<chart>' + _ct(title) + '<plotArea>')
+        xml = xml.replace('<chart><plotArea>', '<chart>'+_ct(title)+'<plotArea>')
     else:
-        xml = re.sub(r'<chart><title>.*?</title>', '<chart>' + _ct(title), xml, count=1, flags=re.DOTALL)
+        xml = re.sub(r'<chart><title>.*?</title>', '<chart>'+_ct(title), xml, count=1, flags=re.DOTALL)
     xml = xml.replace('<cat><numRef>', '<cat><strRef>').replace('</numRef></cat>', '</strRef></cat>')
     old_cat = re.search(r'<catAx>.*?</catAx>', xml, re.DOTALL)
     if old_cat:
         new_cat = ('<catAx><axId val="200"/>'
                    '<scaling><orientation val="minMax"/></scaling>'
-                   '<delete val="0"/><axPos val="b"/>' + _ht(x_title) +
+                   '<delete val="0"/><axPos val="b"/>'+_ht(x_title)+
                    '<numFmt formatCode="@" sourceLinked="0"/>'
                    '<majorTickMark val="out"/><minorTickMark val="none"/>'
                    '<tickLblPos val="nextTo"/><crossAx val="100"/>'
@@ -241,16 +279,16 @@ def fix_chart_xml(xml, title, x_title, left_max=15, right_max=110):
         if axid == '100':
             xml = xml.replace(vax,
                 '<valAx><axId val="100"/>'
-                '<scaling><orientation val="minMax"/><min val="0"/><max val="' + str(left_max) + '"/></scaling>'
-                '<delete val="0"/><axPos val="l"/>' + _vt('入退院数（件）') +
+                '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(left_max)+'"/></scaling>'
+                '<delete val="0"/><axPos val="l"/>'+_vt('入退院数（件）')+
                 '<majorGridlines/><numFmt formatCode="0" sourceLinked="0"/>'
                 '<majorTickMark val="out"/><minorTickMark val="none"/>'
                 '<tickLblPos val="nextTo"/><crossAx val="200"/></valAx>')
         elif axid == '300':
             xml = xml.replace(vax,
                 '<valAx><axId val="300"/>'
-                '<scaling><orientation val="minMax"/><min val="0"/><max val="' + str(right_max) + '"/></scaling>'
-                '<delete val="0"/><axPos val="r"/>' + _vt('稼働率(%)') +
+                '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(right_max)+'"/></scaling>'
+                '<delete val="0"/><axPos val="r"/>'+_vt('稼働率(%)')+
                 '<numFmt formatCode="0&quot;%&quot;" sourceLinked="0"/>'
                 '<majorTickMark val="out"/><minorTickMark val="none"/>'
                 '<tickLblPos val="nextTo"/><crossAx val="200"/><crosses val="max"/></valAx>')
@@ -258,56 +296,31 @@ def fix_chart_xml(xml, title, x_title, left_max=15, right_max=110):
     if old_leg:
         xml = xml.replace(old_leg.group(),
             '<legend><legendPos val="r"/>'
-            '<spPr><a:solidFill ' + _NS + '><a:srgbClr val="FFFFFF"/></a:solidFill>'
-            '<a:ln ' + _NS + ' w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></spPr>'
-            '<txPr><a:bodyPr ' + _NS + '/><a:lstStyle ' + _NS + '/>'
-            '<a:p ' + _NS + '><a:pPr><a:defRPr sz="900"/></a:pPr></a:p></txPr>'
+            '<spPr><a:solidFill '+_NS+'><a:srgbClr val="FFFFFF"/></a:solidFill>'
+            '<a:ln '+_NS+' w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></spPr>'
+            '<txPr><a:bodyPr '+_NS+'/><a:lstStyle '+_NS+'/>'
+            '<a:p '+_NS+'><a:pPr><a:defRPr sz="900"/></a:pPr></a:p></txPr>'
             '</legend>')
     return xml
 
-PINK   = 'FFFFCCFF'
-BLUE   = 'FFDDEBF7'
-ORANGE = 'FFED7D31'
-TOTAL_BEDS = 19
-WEEKDAYS = {0:'月',1:'火',2:'水',3:'木',4:'金',5:'土',6:'日'}
-
-ROOM_TYPE = {
-    '301':'1人部屋個室','302':'1人部屋個室','303':'1人部屋個室',
-    '304':'1人部屋個室','305':'1人部屋個室','306':'1人部屋個室','201':'1人部屋個室',
-    '307-1':'307(5人部屋)','307-2':'307(5人部屋)','307-3':'307(5人部屋)',
-    '307-4':'307(5人部屋)','307-5':'307(5人部屋)',
-    '308-1':'308(4人部屋)','308-2':'308(4人部屋)',
-    '308-3':'308(4人部屋)','308-4':'308(4人部屋)',
-    '202-1':'202(3人部屋)','202-2':'202(3人部屋)','202-3':'202(3人部屋)',
-}
-
-def fill(color): return PatternFill('solid', fgColor=color)
-def bdr():
-    s = Side(style='thin')
-    return Border(left=s, right=s, top=s, bottom=s)
-def occ_fill(pct):
-    if pct >= 90: return fill('FFFFC7CE')
-    if pct >= 70: return fill('FFFFEB9C')
-    return fill('FFC6EFCE')
-
-HEADER_BG = 'FF4472C4'
-SUBHDR_BG = 'FFD9E1F2'
-
-def detect_room_id(val):
-    if not val: return None
-    import unicodedata
-    v = unicodedata.normalize('NFKC', str(val))
-    patterns = [
-        (r'307.{0,2}3','307-3'),(r'307.{0,2}4','307-4'),(r'307.{0,2}1','307-1'),
-        (r'307.{0,2}5','307-5'),(r'307.{0,2}2','307-2'),
-        (r'308.{0,2}3','308-3'),(r'308.{0,2}1','308-1'),(r'308.{0,2}4','308-4'),(r'308.{0,2}2','308-2'),
-        (r'202.{0,2}1','202-1'),(r'202.{0,2}3','202-3'),(r'202.{0,2}2','202-2'),
-        (r'306','306'),(r'305','305'),(r'304','304'),(r'303','303'),(r'302','302'),(r'301','301'),
-        (r'201','201'),
-    ]
-    for pat, rid in patterns:
-        if re.search(pat, v): return rid
-    return None
+def make_combo_chart(ws_src, r_start, r_end, width=28, height=14):
+    bar=BarChart(); bar.type='col'; bar.grouping='clustered'
+    bar.style=2; bar.width=width; bar.height=height
+    bar.y_axis.axId=100; bar.x_axis.axId=200
+    bar.add_data(Reference(ws_src,min_col=2,max_col=2,min_row=r_start,max_row=r_end),titles_from_data=True)
+    bar.add_data(Reference(ws_src,min_col=3,max_col=3,min_row=r_start,max_row=r_end),titles_from_data=True)
+    bar.set_categories(Reference(ws_src,min_col=1,min_row=r_start+1,max_row=r_end))
+    bar.series[0].spPr.solidFill='4472C4'
+    bar.series[1].spPr.solidFill='C0504D'
+    line=LineChart()
+    line.y_axis.axId=300; line.x_axis.axId=200; line.y_axis.crosses='max'
+    line.add_data(Reference(ws_src,min_col=4,max_col=4,min_row=r_start,max_row=r_end),titles_from_data=True)
+    line.series[0].spPr.ln.solidFill='70AD47'
+    line.series[0].graphicalProperties.line.solidFill='70AD47'
+    line.series[0].graphicalProperties.line.width=25000
+    line.series[0].smooth=True
+    bar+=line
+    return bar
 
 raw = bytes(file_bytes)
 
@@ -330,7 +343,6 @@ if selected_year == 'auto':
 else:
     target_year = int(selected_year)
 
-# 対象シート選択
 ws_data = None
 for sname in wb_tmp.sheetnames:
     if '病床' in sname and str(target_year) in sname:
@@ -338,7 +350,6 @@ for sname in wb_tmp.sheetnames:
 if ws_data is None:
     ws_data = next((wb_tmp[n] for n in wb_tmp.sheetnames if '病床' in n), None)
 
-# 部屋行を動的検出
 ROOM_MAP = {}
 for row in ws_data.iter_rows(min_col=1, max_col=1):
     cell = row[0]
@@ -347,8 +358,6 @@ for row in ws_data.iter_rows(min_col=1, max_col=1):
         if rid: ROOM_MAP[cell.row] = rid
 
 all_beds = list(ROOM_MAP.values())
-
-# 日付読み込み
 dates_map = {}
 for col in range(2, ws_data.max_column+1):
     cell = ws_data.cell(row=1, column=col)
@@ -357,11 +366,9 @@ for col in range(2, ws_data.max_column+1):
 
 target_dates = sorted([d for d in dates_map.values() if d.year == target_year])
 if not target_dates:
-    raise ValueError(f'{target_year}年のデータが見つかりません')
-
+    raise ValueError(str(target_year)+'年のデータが見つかりません')
 col_by_date = {v: k for k, v in dates_map.items() if v.year == target_year}
 
-# セル色読み込み（スタイル保持のため再読み込み）
 wb_style = openpyxl.load_workbook(io.BytesIO(raw))
 ws_style = None
 for sname in wb_style.sheetnames:
@@ -376,17 +383,19 @@ for row_num, bed_id in ROOM_MAP.items():
         col = col_by_date.get(dt)
         if col is None: continue
         fg = ws_style.cell(row=row_num, column=col).fill.fgColor.rgb
-        if   fg == PINK:   bed_day_color[(bed_id, str(dt))] = 'female'
+        if fg == PINK:   bed_day_color[(bed_id, str(dt))] = 'female'
         elif fg == BLUE:   bed_day_color[(bed_id, str(dt))] = 'male'
         elif fg == ORANGE: bed_day_color[(bed_id, str(dt))] = 'orange'
         else:              bed_day_color[(bed_id, str(dt))] = None
 
 def gc(bid, dt): return bed_day_color.get((bid, str(dt)))
 
-# 日次集計
-stats = {str(dt): {'dt':dt,'total':0,'male':0,'female':0,
-    'admissions':0,'discharges':0,'admit_male':0,'admit_female':0,
-    'discharge_male':0,'discharge_female':0} for dt in target_dates}
+stats = {str(dt): {
+    'dt': dt, 'total': 0, 'male': 0, 'female': 0,
+    'admissions': 0, 'discharges': 0,
+    'admit_male': 0, 'admit_female': 0,
+    'discharge_male': 0, 'discharge_female': 0,
+} for dt in target_dates}
 
 for bed_id in all_beds:
     for i, dt in enumerate(target_dates):
@@ -412,8 +421,7 @@ for bed_id in all_beds:
             else: ps['discharge_male'] += 1
 
 for i, dt in enumerate(target_dates):
-    s = stats[str(dt)]
-    s['male'] = s['female'] = 0
+    s = stats[str(dt)]; s['male'] = s['female'] = 0
     for bed_id in all_beds:
         cur = gc(bed_id, dt)
         nxt = gc(bed_id, target_dates[i+1]) if i < len(target_dates)-1 else None
@@ -423,57 +431,153 @@ for i, dt in enumerate(target_dates):
             if nxt == 'female': s['female'] += 1
             elif nxt == 'male': s['male'] += 1
 
-# 月別グループ
 months = OrderedDict()
 for dt in target_dates:
     key = (dt.year, dt.month)
     if key not in months: months[key] = []
     months[key].append(dt)
 
-# 出力ワークブック
 wb_out = openpyxl.Workbook()
 wb_out.remove(wb_out.active)
 
-def make_month_sheet(ws, year, month, day_list, ws_cd=None, chart_data_offsets=None):
+# 非表示グラフデータシート
+ws_cd = wb_out.create_sheet('_data')
+ws_cd.sheet_state = 'hidden'
+chart_data_offsets = {}
+cur_row = 1
+for (year, month), day_list in months.items():
+    chart_data_offsets[(year, month)] = cur_row
+    ws_cd.cell(row=cur_row, column=1).value = '日付'
+    ws_cd.cell(row=cur_row, column=2).value = '入院数'
+    ws_cd.cell(row=cur_row, column=3).value = '退院数'
+    ws_cd.cell(row=cur_row, column=4).value = '稼働率(%)'
+    for j, dt in enumerate(day_list):
+        s = stats[str(dt)]
+        ws_cd.cell(row=cur_row+1+j, column=1).value = dt.strftime('%m/%d')
+        ws_cd.cell(row=cur_row+1+j, column=2).value = s['admissions']
+        ws_cd.cell(row=cur_row+1+j, column=3).value = s['discharges']
+        ws_cd.cell(row=cur_row+1+j, column=4).value = round(s['total']/TOTAL_BEDS*100, 1)
+    cur_row += len(day_list) + 2
+
+sum_start = cur_row
+ws_cd.cell(row=sum_start, column=1).value = '月'
+ws_cd.cell(row=sum_start, column=2).value = '入院数'
+ws_cd.cell(row=sum_start, column=3).value = '退院数'
+ws_cd.cell(row=sum_start, column=4).value = '稼働率(%)'
+for mi, ((year, month), day_list) in enumerate(months.items()):
+    sl = [stats[str(dt)] for dt in day_list]; n_m = len(sl)
+    ws_cd.cell(row=sum_start+1+mi, column=1).value = str(month)+'月'
+    ws_cd.cell(row=sum_start+1+mi, column=2).value = sum(s['admissions'] for s in sl)
+    ws_cd.cell(row=sum_start+1+mi, column=3).value = sum(s['discharges'] for s in sl)
+    ws_cd.cell(row=sum_start+1+mi, column=4).value = round(sum(s['total'] for s in sl)/(n_m*TOTAL_BEDS)*100, 1)
+
+n_months = len(months)
+
+# 総合サマリーシート
+ws_sum = wb_out.create_sheet('総合サマリー')
+ws_sum.freeze_panes = 'A3'
+ws_sum.merge_cells('A1:I1')
+h = ws_sum['A1']
+h.value = '病床稼働 総合サマリー（'+str(target_year)+'年）'
+h.font = Font(bold=True, size=14, color='FFFFFFFF')
+h.fill = fill(HEADER_BG); h.alignment = Alignment(horizontal='center')
+ws_sum.row_dimensions[1].height = 24
+ws_sum.cell(row=2, column=1).value = '■ 月別サマリー'
+ws_sum.cell(row=2, column=1).font = Font(bold=True)
+for ci, hdr in enumerate(['月','日数','平均患者数','平均男性','平均女性','平均入院数','平均退院数','平均稼働率','月間稼働率']):
+    cell = ws_sum.cell(row=3, column=ci+1)
+    cell.value = hdr; cell.font = Font(bold=True, size=10)
+    cell.fill = fill(SUBHDR_BG); cell.alignment = Alignment(horizontal='center'); cell.border = bdr()
+
+for mi, ((year, month), day_list) in enumerate(months.items()):
+    sl = [stats[str(dt)] for dt in day_list]; n = len(sl)
+    avg_total  = round(sum(s['total'] for s in sl)/n, 1)
+    avg_male   = round(sum(s['male'] for s in sl)/n, 1)
+    avg_female = round(sum(s['female'] for s in sl)/n, 1)
+    avg_adm    = round(sum(s['admissions'] for s in sl)/n, 1)
+    avg_dis    = round(sum(s['discharges'] for s in sl)/n, 1)
+    avg_occ    = round(avg_total/TOTAL_BEDS*100, 1)
+    mon_occ    = round(sum(s['total'] for s in sl)/(n*TOTAL_BEDS)*100, 1)
+    row = 4 + mi
+    for ci, val in enumerate([str(month)+'月', n, avg_total, avg_male, avg_female, avg_adm, avg_dis, str(avg_occ)+'%', str(mon_occ)+'%']):
+        cell = ws_sum.cell(row=row, column=ci+1)
+        cell.value = val; cell.font = Font(size=10)
+        cell.alignment = Alignment(horizontal='center'); cell.border = bdr()
+        if ci in (7, 8):
+            cell.fill = occ_fill(float(str(val).replace('%','')))
+
+wd_start = 4 + n_months + 2
+ws_sum.cell(row=wd_start-1, column=1).value = '■ 曜日別サマリー（全期間平均）'
+ws_sum.cell(row=wd_start-1, column=1).font = Font(bold=True)
+for ci, hdr in enumerate(['曜日','件数(日)','平均患者数','平均男性','平均女性','合計入院数','合計退院数','平均稼働率']):
+    cell = ws_sum.cell(row=wd_start, column=ci+1)
+    cell.value = hdr; cell.font = Font(bold=True, size=10)
+    cell.fill = fill(SUBHDR_BG); cell.alignment = Alignment(horizontal='center'); cell.border = bdr()
+
+for ri, wd in enumerate(['月','火','水','木','金','土','日']):
+    sl = [stats[str(dt)] for dt in target_dates if WEEKDAYS[dt.weekday()] == wd]
+    n = len(sl)
+    if n == 0: continue
+    avg_total  = round(sum(s['total'] for s in sl)/n, 1)
+    avg_male   = round(sum(s['male'] for s in sl)/n, 1)
+    avg_female = round(sum(s['female'] for s in sl)/n, 1)
+    avg_occ    = round(avg_total/TOTAL_BEDS*100, 1)
+    row = wd_start + 1 + ri
+    for ci, val in enumerate([wd, n, avg_total, avg_male, avg_female,
+                               sum(s['admissions'] for s in sl), sum(s['discharges'] for s in sl), str(avg_occ)+'%']):
+        cell = ws_sum.cell(row=row, column=ci+1)
+        cell.value = val; cell.font = Font(size=10)
+        cell.alignment = Alignment(horizontal='center'); cell.border = bdr()
+        if wd == '土': cell.fill = fill('FFD9E1F2')
+        elif wd == '日': cell.fill = fill('FFFCE4D6')
+for col, w in zip('ABCDEFGHI', [8,10,12,10,10,12,12,12,12]):
+    ws_sum.column_dimensions[col].width = w
+
+# サマリーグラフ追加
+chart_sum = make_combo_chart(ws_cd, sum_start, sum_start+n_months, width=26, height=14)
+ws_sum.add_chart(chart_sum, 'A'+str(wd_start+10))
+
+# 月別シート
+def make_month_sheet(ws, year, month, day_list):
     ws.freeze_panes = 'C4'
     n = len(day_list)
     BED_START = 4; BED_END = BED_START + len(all_beds) - 1
     MALE_ROW = BED_END+2; FEM_ROW = MALE_ROW+1; ADM_ROW = FEM_ROW+1; DIS_ROW = ADM_ROW+1; OCC_ROW = DIS_ROW+1
 
-    ws.merge_cells(start_row=1,start_column=1,end_row=1,end_column=2+n)
-    t = ws.cell(row=1,column=1)
-    t.value = f'{year}年{month}月 病床稼働状況'
-    t.font = Font(bold=True,size=14,color='FFFFFFFF'); t.fill = fill(HEADER_BG)
-    t.alignment = Alignment(horizontal='center',vertical='center'); ws.row_dimensions[1].height = 24
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=2+n)
+    t = ws.cell(row=1, column=1)
+    t.value = str(year)+'年'+str(month)+'月 病床稼働状況'
+    t.font = Font(bold=True, size=14, color='FFFFFFFF'); t.fill = fill(HEADER_BG)
+    t.alignment = Alignment(horizontal='center', vertical='center'); ws.row_dimensions[1].height = 24
 
-    for r in (2,3):
-        for c,v in [(1,'部屋番号'),(2,'タイプ')]:
-            cell = ws.cell(row=r,column=c)
-            cell.value=v; cell.font=Font(bold=True,size=9); cell.fill=fill(SUBHDR_BG)
-            cell.alignment=Alignment(horizontal='center',vertical='center'); cell.border=bdr()
+    for r in (2, 3):
+        for c2, v in [(1,'部屋番号'),(2,'タイプ')]:
+            cell = ws.cell(row=r, column=c2)
+            cell.value = v; cell.font = Font(bold=True, size=9); cell.fill = fill(SUBHDR_BG)
+            cell.alignment = Alignment(horizontal='center', vertical='center'); cell.border = bdr()
 
-    for j,dt in enumerate(day_list):
+    for j, dt in enumerate(day_list):
         col = 3+j
-        dc = ws.cell(row=2,column=col)
-        dc.value=dt.strftime('%m/%d'); dc.font=Font(bold=True,size=9); dc.fill=fill(SUBHDR_BG)
-        dc.alignment=Alignment(horizontal='center'); dc.border=bdr()
+        dc = ws.cell(row=2, column=col)
+        dc.value = dt.strftime('%m/%d'); dc.font = Font(bold=True, size=9); dc.fill = fill(SUBHDR_BG)
+        dc.alignment = Alignment(horizontal='center'); dc.border = bdr()
         wd = WEEKDAYS[dt.weekday()]
-        wc = ws.cell(row=3,column=col)
-        wc.value=wd; wc.font=Font(bold=True,size=9)
-        wc.fill=fill('FFBDD7EE') if wd=='土' else fill('FFFCE4D6') if wd=='日' else fill(SUBHDR_BG)
-        wc.alignment=Alignment(horizontal='center'); wc.border=bdr()
+        wc = ws.cell(row=3, column=col)
+        wc.value = wd; wc.font = Font(bold=True, size=9)
+        wc.fill = fill('FFBDD7EE') if wd=='土' else fill('FFFCE4D6') if wd=='日' else fill(SUBHDR_BG)
+        wc.alignment = Alignment(horizontal='center'); wc.border = bdr()
 
-    for bi,bed_id in enumerate(all_beds):
+    for bi, bed_id in enumerate(all_beds):
         row = BED_START+bi
-        bc = ws.cell(row=row,column=1)
-        bc.value=bed_id; bc.font=Font(bold=True,size=9); bc.fill=fill(SUBHDR_BG)
-        bc.alignment=Alignment(horizontal='center',vertical='center'); bc.border=bdr()
-        tc = ws.cell(row=row,column=2)
-        tc.value=ROOM_TYPE.get(bed_id,''); tc.font=Font(size=9); tc.fill=fill(SUBHDR_BG)
-        tc.alignment=Alignment(horizontal='center',vertical='center'); tc.border=bdr()
-        for j,dt in enumerate(day_list):
-            col = 3+j; cur = gc(bed_id,dt)
-            cell = ws.cell(row=row,column=col)
+        bc = ws.cell(row=row, column=1)
+        bc.value = bed_id; bc.font = Font(bold=True, size=9); bc.fill = fill(SUBHDR_BG)
+        bc.alignment = Alignment(horizontal='center', vertical='center'); bc.border = bdr()
+        tc = ws.cell(row=row, column=2)
+        tc.value = ROOM_TYPE.get(bed_id,''); tc.font = Font(size=9); tc.fill = fill(SUBHDR_BG)
+        tc.alignment = Alignment(horizontal='center', vertical='center'); tc.border = bdr()
+        for j, dt in enumerate(day_list):
+            col = 3+j; cur = gc(bed_id, dt)
+            cell = ws.cell(row=row, column=col)
             if   cur=='female': cell.fill=fill('FFFF99CC'); cell.value='F'
             elif cur=='male':   cell.fill=fill('FF9DC3E6'); cell.value='M'
             elif cur=='orange': cell.fill=fill('FFED7D31'); cell.value='O'
@@ -482,243 +586,83 @@ def make_month_sheet(ws, year, month, day_list, ws_cd=None, chart_data_offsets=N
             cell.alignment=Alignment(horizontal='center',vertical='center'); cell.border=bdr()
         ws.row_dimensions[row].height=14
 
-    for row,label,key,bg in [
+    for row, label, key, bg in [
         (MALE_ROW,'当日の男性患者数','male','FFD6E4F7'),
-        (FEM_ROW,'当日の女性患者数','female','FFFFE0EF'),
-        (ADM_ROW,'当日の入院実数','admissions','FFE2EFDA'),
-        (DIS_ROW,'当日の退院実数','discharges','FFFFE699'),
+        (FEM_ROW, '当日の女性患者数','female','FFFFE0EF'),
+        (ADM_ROW, '当日の入院実数','admissions','FFE2EFDA'),
+        (DIS_ROW, '当日の退院実数','discharges','FFFFE699'),
     ]:
         ws.merge_cells(start_row=row,start_column=1,end_row=row,end_column=2)
         lc = ws.cell(row=row,column=1)
         lc.value=label; lc.font=Font(bold=True,size=9); lc.fill=fill(SUBHDR_BG)
         lc.alignment=Alignment(horizontal='center',vertical='center'); lc.border=bdr()
+        ws.cell(row=row,column=2).border=bdr()
         for j,dt in enumerate(day_list):
             cell=ws.cell(row=row,column=3+j); cell.value=stats[str(dt)][key]
             cell.font=Font(size=9); cell.fill=fill(bg)
             cell.alignment=Alignment(horizontal='center'); cell.border=bdr()
 
     ws.merge_cells(start_row=OCC_ROW,start_column=1,end_row=OCC_ROW,end_column=2)
-    lc = ws.cell(row=OCC_ROW,column=1)
+    lc=ws.cell(row=OCC_ROW,column=1)
     lc.value='ベッド稼働率'; lc.font=Font(bold=True,size=9); lc.fill=fill(SUBHDR_BG)
     lc.alignment=Alignment(horizontal='center',vertical='center'); lc.border=bdr()
     ws.cell(row=OCC_ROW,column=2).border=bdr()
     for j,dt in enumerate(day_list):
-        pct = round(stats[str(dt)]['total']/TOTAL_BEDS*100,1)
-        cell = ws.cell(row=OCC_ROW,column=3+j)
-        cell.value=f'{pct}%'; cell.font=Font(bold=True,size=9); cell.fill=occ_fill(pct)
+        pct=round(stats[str(dt)]['total']/TOTAL_BEDS*100,1)
+        cell=ws.cell(row=OCC_ROW,column=3+j)
+        cell.value=str(pct)+'%'; cell.font=Font(bold=True,size=9); cell.fill=occ_fill(pct)
         cell.alignment=Alignment(horizontal='center'); cell.border=bdr()
 
-    # 全セルに罫線を一括適用（空白セルを含む）
-    for r in range(2, OCC_ROW+1):
-        for col_idx in range(1, 3+n):
-            cell = ws.cell(row=r, column=col_idx)
-            if cell.border is None or cell.border.left.style is None:
-                cell.border = bdr()
-    ws.column_dimensions['A'].width=10; ws.column_dimensions['B'].width=14
-    for j in range(n): ws.column_dimensions[get_column_letter(3+j)].width=5
-
-    # 全セルに罫線を一括適用
     for r in range(2, OCC_ROW+1):
         for col_idx in range(1, 3+n):
             cell=ws.cell(row=r,column=col_idx)
             if not cell.border or not cell.border.left.style:
                 cell.border=bdr()
 
-    # ─── 月別複合グラフ（既存データを直接参照）───
-    # 日付行(2行目)の3列目〜が日付、ADM_ROW/DIS_ROW/OCC_ROWの3列目〜が入退院数・稼働率
-    # 棒グラフ（入退院数）- ADM_ROW, DIS_ROWを参照
-    # ─── 月別複合グラフ（非表示シートデータを参照）───
+    ws.column_dimensions['A'].width=10; ws.column_dimensions['B'].width=14
+    for j in range(n):
+        ws.column_dimensions[get_column_letter(3+j)].width=5
+
+    # 月別グラフ追加
     cd_start = chart_data_offsets[(year,month)]
     cd_end   = cd_start + n
-    CHART_START_ROW = OCC_ROW + 3
+    adm_vals = [stats[str(dt)]['admissions'] for dt in day_list]
+    dis_vals = [stats[str(dt)]['discharges'] for dt in day_list]
+    left_max = max(15, max(max(adm_vals), max(dis_vals))+3)
+    chart_m = make_combo_chart(ws_cd, cd_start, cd_end, width=30, height=14)
+    ws.add_chart(chart_m, 'A'+str(OCC_ROW+3))
 
-    bar_m=BarChart(); bar_m.type='col'; bar_m.grouping='clustered'
-    bar_m.title=f'{year}年{month}月 日別稼働率・入退院数'
-    bar_m.y_axis.title='入退院数（件）'
-    bar_m.y_axis.numFmt='0'
-    bar_m.x_axis.title='日付'
-    bar_m.style=2; bar_m.width=30; bar_m.height=14
+for (year, month), day_list in months.items():
+    ws_m = wb_out.create_sheet(str(month)+'月')
+    make_month_sheet(ws_m, year, month, day_list)
 
-    data_adm_m=Reference(ws_cd,min_col=2,max_col=2,min_row=cd_start,max_row=cd_end)
-    data_dis_m=Reference(ws_cd,min_col=3,max_col=3,min_row=cd_start,max_row=cd_end)
-    cats_m=Reference(ws_cd,min_col=1,min_row=cd_start+1,max_row=cd_end)
-    bar_m.add_data(data_adm_m,titles_from_data=True)
-    bar_m.add_data(data_dis_m,titles_from_data=True)
-    bar_m.set_categories(cats_m)
-    bar_m.series[0].spPr.solidFill='ED7D31'
-    bar_m.series[1].spPr.solidFill='70AD47'
-
-    line_m=LineChart()
-    line_m.y_axis.title='稼働率(%)'
-    line_m.y_axis.axId=200
-    line_m.y_axis.crosses='max'
-    line_m.y_axis.numFmt='0"%"'
-    line_m.y_axis.scaling.min=0
-    line_m.y_axis.scaling.max=100
-    data_occ_m=Reference(ws_cd,min_col=4,max_col=4,min_row=cd_start,max_row=cd_end)
-    line_m.add_data(data_occ_m,titles_from_data=True)
-    line_m.series[0].spPr.ln.solidFill='4472C4'
-    line_m.series[0].graphicalProperties.line.solidFill='4472C4'
-    line_m.series[0].graphicalProperties.line.width=22000
-    line_m.series[0].smooth=True
-
-    bar_m+=line_m
-    ws.add_chart(bar_m,'A'+str(CHART_START_ROW))
-
-# 総合サマリー
-ws_sum = wb_out.create_sheet('総合サマリー')
-ws_sum.merge_cells('A1:I1')
-h=ws_sum['A1']; h.value=f'病床稼働 総合サマリー（{target_year}年）'
-h.font=Font(bold=True,size=14,color='FFFFFFFF'); h.fill=fill(HEADER_BG)
-h.alignment=Alignment(horizontal='center'); ws_sum.row_dimensions[1].height=24
-ws_sum.cell(row=2,column=1).value='■ 月別サマリー'; ws_sum.cell(row=2,column=1).font=Font(bold=True)
-for ci,hdr in enumerate(['月','日数','平均患者数','平均男性','平均女性','平均入院数','平均退院数','平均稼働率','月間稼働率']):
-    cell=ws_sum.cell(row=3,column=ci+1); cell.value=hdr; cell.font=Font(bold=True,size=10)
-    cell.fill=fill(SUBHDR_BG); cell.alignment=Alignment(horizontal='center'); cell.border=bdr()
-
-for mi,((year,month),day_list) in enumerate(months.items()):
-    sl=[stats[str(dt)] for dt in day_list]; n=len(sl)
-    avg_t=round(sum(s['total'] for s in sl)/n,1); avg_m=round(sum(s['male'] for s in sl)/n,1)
-    avg_f=round(sum(s['female'] for s in sl)/n,1); avg_a=round(sum(s['admissions'] for s in sl)/n,1)
-    avg_d=round(sum(s['discharges'] for s in sl)/n,1); avg_o=round(avg_t/TOTAL_BEDS*100,1)
-    mon_o=round(sum(s['total'] for s in sl)/(n*TOTAL_BEDS)*100,1)
-    row=4+mi
-    for ci,val in enumerate([f'{month}月',n,avg_t,avg_m,avg_f,avg_a,avg_d,f'{avg_o}%',f'{mon_o}%']):
-        cell=ws_sum.cell(row=row,column=ci+1); cell.value=val; cell.font=Font(size=10)
-        cell.alignment=Alignment(horizontal='center'); cell.border=bdr()
-        if ci in (7,8): cell.fill=occ_fill(float(str(val).replace('%','')))
-
-wd_start=4+len(months)+2
-ws_sum.cell(row=wd_start-1,column=1).value='■ 曜日別サマリー（全期間平均）'
-ws_sum.cell(row=wd_start-1,column=1).font=Font(bold=True)
-for ci,hdr in enumerate(['曜日','件数(日)','平均患者数','平均男性','平均女性','合計入院数','合計退院数','平均稼働率']):
-    cell=ws_sum.cell(row=wd_start,column=ci+1); cell.value=hdr; cell.font=Font(bold=True,size=10)
-    cell.fill=fill(SUBHDR_BG); cell.alignment=Alignment(horizontal='center'); cell.border=bdr()
-
-for ri,wd in enumerate(['月','火','水','木','金','土','日']):
-    sl=[stats[str(dt)] for dt in target_dates if WEEKDAYS[dt.weekday()]==wd]; n=len(sl)
-    if n==0: continue
-    avg_t=round(sum(s['total'] for s in sl)/n,1); avg_m=round(sum(s['male'] for s in sl)/n,1)
-    avg_f=round(sum(s['female'] for s in sl)/n,1); avg_o=round(avg_t/TOTAL_BEDS*100,1)
-    row=wd_start+1+ri
-    for ci,val in enumerate([wd,n,avg_t,avg_m,avg_f,sum(s['admissions'] for s in sl),sum(s['discharges'] for s in sl),f'{avg_o}%']):
-        cell=ws_sum.cell(row=row,column=ci+1); cell.value=val; cell.font=Font(size=10)
-        cell.alignment=Alignment(horizontal='center'); cell.border=bdr()
-        if wd=='土': cell.fill=fill('FFD9E1F2')
-        elif wd=='日': cell.fill=fill('FFFCE4D6')
-for col,w in zip('ABCDEFGHI',[8,10,12,10,10,12,12,12,12]):
-    ws_sum.column_dimensions[col].width=w
-
-# ─── 総合サマリー複合グラフ（月別稼働率折れ線 + 入退院数棒グラフ）───
-SUM_CHART_ROW = wd_start + 10
-n_months = len(months)
-
-# データ表ヘッダー
-hdr_labels = ['月','稼働率(%)','入院数','退院数']
-hdr_colors = [SUBHDR_BG, 'FFD9E1F2', 'FFFCE4D6', 'FFE2EFDA']
-for ci, (label, bg) in enumerate(zip(hdr_labels, hdr_colors)):
-    cell = ws_sum.cell(row=SUM_CHART_ROW, column=ci+1)
-    cell.value = label
-    cell.font = Font(bold=True, size=10)
-    cell.fill = fill(bg)
-    cell.alignment = Alignment(horizontal='center', vertical='center')
-    cell.border = bdr()
-
-for mi, ((year, month), day_list) in enumerate(months.items()):
-    sl = [stats[str(dt)] for dt in day_list]; n_m = len(sl)
-    avg_occ = round(sum(s['total'] for s in sl)/(n_m*TOTAL_BEDS)*100, 1)
-    tot_adm = sum(s['admissions'] for s in sl)
-    tot_dis = sum(s['discharges'] for s in sl)
-    row_vals = [f'{month}月', avg_occ, tot_adm, tot_dis]
-    row_bgs  = [SUBHDR_BG, 'FFD9E1F2', 'FFFCE4D6', 'FFE2EFDA']
-    for ci, (val, bg) in enumerate(zip(row_vals, row_bgs)):
-        cell = ws_sum.cell(row=SUM_CHART_ROW+1+mi, column=ci+1)
-        cell.value = val
-        cell.font = Font(size=10)
-        cell.fill = fill(bg)
-        cell.alignment = Alignment(horizontal='center', vertical='center')
-        cell.border = bdr()
-
-# 棒グラフ（月別入退院数）
-bar_s = BarChart()
-bar_s.type = 'col'; bar_s.grouping = 'clustered'
-bar_s.style = 2; bar_s.width = 28; bar_s.height = 14
-bar_s.y_axis.axId = 100; bar_s.x_axis.axId = 200
-
-data_adm_s=Reference(ws_sum,min_col=3,max_col=3,min_row=SUM_CHART_ROW,max_row=SUM_CHART_ROW+n_months)
-data_dis_s=Reference(ws_sum,min_col=4,max_col=4,min_row=SUM_CHART_ROW,max_row=SUM_CHART_ROW+n_months)
-cats_s=Reference(ws_sum,min_col=1,min_row=SUM_CHART_ROW+1,max_row=SUM_CHART_ROW+n_months)
-bar_s.add_data(data_adm_s,titles_from_data=True)
-bar_s.add_data(data_dis_s,titles_from_data=True)
-bar_s.set_categories(cats_s)
-bar_s.series[0].spPr.solidFill='4472C4'
-bar_s.series[1].spPr.solidFill='C0504D'
-
-line_s = LineChart()
-line_s.y_axis.axId = 300; line_s.x_axis.axId = 200; line_s.y_axis.crosses = 'max'
-data_occ_s = Reference(ws_sum, min_col=2, max_col=2, min_row=SUM_CHART_ROW, max_row=SUM_CHART_ROW+n_months)
-line_s.add_data(data_occ_s, titles_from_data=True)
-line_s.series[0].spPr.ln.solidFill='70AD47'
-line_s.series[0].graphicalProperties.line.solidFill='70AD47'
-line_s.series[0].graphicalProperties.line.width=25000
-line_s.series[0].smooth=True
-
-bar_s += line_s
-ws_sum.add_chart(bar_s, 'A' + str(SUM_CHART_ROW + n_months + 3))
-
-# 非表示グラフデータシート作成
-ws_cd=wb_out.create_sheet('_グラフデータ')
-ws_cd.sheet_state='hidden'
-ws_cd.cell(row=1,column=1).value='日付'
-ws_cd.cell(row=1,column=2).value='入院数'
-ws_cd.cell(row=1,column=3).value='退院数'
-ws_cd.cell(row=1,column=4).value='稼働率(%)'
-
-chart_data_offsets={}
-current_row=1
-for (year,month),day_list in months.items():
-    chart_data_offsets[(year,month)]=current_row
-    ws_cd.cell(row=current_row,column=1).value=f'{month}月データ'
-    ws_cd.cell(row=current_row,column=2).value='入院数'
-    ws_cd.cell(row=current_row,column=3).value='退院数'
-    ws_cd.cell(row=current_row,column=4).value='稼働率(%)'
-    for j,dt in enumerate(day_list):
-        s=stats[str(dt)]
-        ws_cd.cell(row=current_row+1+j,column=1).value=dt.strftime('%m/%d')
-        ws_cd.cell(row=current_row+1+j,column=2).value=s['admissions']
-        ws_cd.cell(row=current_row+1+j,column=3).value=s['discharges']
-        ws_cd.cell(row=current_row+1+j,column=4).value=round(s['total']/TOTAL_BEDS*100,1)
-    current_row+=len(day_list)+2
-
-# 月別シート
-for (year,month),day_list in months.items():
-    ws_m=wb_out.create_sheet(f'{month}月')
-    make_month_sheet(ws_m,year,month,day_list,ws_cd,chart_data_offsets)
-
-# 部屋別稼働
-ws_room=wb_out.create_sheet('部屋別稼働')
+# 部屋別稼働シート
+ws_room = wb_out.create_sheet('部屋別稼働')
 ws_room.merge_cells('A1:E1')
-h=ws_room['A1']; h.value='部屋別稼働状況（全期間）'
-h.font=Font(bold=True,size=13,color='FFFFFFFF'); h.fill=fill(HEADER_BG); h.alignment=Alignment(horizontal='center')
-for ci,hdr in enumerate(['部屋番号','タイプ','総ベッド数','稼働日数','稼働率(%)']):
-    cell=ws_room.cell(row=2,column=ci+1); cell.value=hdr; cell.font=Font(bold=True,size=10)
-    cell.fill=fill(SUBHDR_BG); cell.alignment=Alignment(horizontal='center'); cell.border=bdr()
-for bi,bed_id in enumerate(all_beds):
-    occ=sum(1 for dt in target_dates if gc(bed_id,dt) is not None)
-    pct=round(occ/len(target_dates)*100,1)
-    for ci,val in enumerate([bed_id,ROOM_TYPE.get(bed_id,''),1,occ,f'{pct}%']):
-        cell=ws_room.cell(row=3+bi,column=ci+1); cell.value=val; cell.font=Font(size=10)
-        cell.alignment=Alignment(horizontal='center'); cell.border=bdr()
-        if ci==4: cell.fill=occ_fill(pct)
-for col,w in zip('ABCDE',[10,16,10,10,12]):
-    ws_room.column_dimensions[col].width=w
+h = ws_room['A1']
+h.value = '部屋別稼働状況（全期間）'
+h.font = Font(bold=True, size=13, color='FFFFFFFF'); h.fill = fill(HEADER_BG); h.alignment = Alignment(horizontal='center')
+for ci, hdr in enumerate(['部屋番号','タイプ','総ベッド数','稼働日数','稼働率(%)']):
+    cell = ws_room.cell(row=2, column=ci+1)
+    cell.value = hdr; cell.font = Font(bold=True, size=10)
+    cell.fill = fill(SUBHDR_BG); cell.alignment = Alignment(horizontal='center'); cell.border = bdr()
+for bi, bed_id in enumerate(all_beds):
+    occ = sum(1 for dt in target_dates if gc(bed_id,dt) is not None)
+    pct = round(occ/len(target_dates)*100, 1)
+    for ci, val in enumerate([bed_id, ROOM_TYPE.get(bed_id,''), 1, occ, str(pct)+'%']):
+        cell = ws_room.cell(row=3+bi, column=ci+1)
+        cell.value = val; cell.font = Font(size=10)
+        cell.alignment = Alignment(horizontal='center'); cell.border = bdr()
+        if ci == 4: cell.fill = occ_fill(pct)
+for col, w in zip('ABCDE', [10,16,10,10,12]):
+    ws_room.column_dimensions[col].width = w
 
-buf_pre=io.BytesIO(); wb_out.save(buf_pre)
+# 保存してXML修正適用
+buf_pre = io.BytesIO(); wb_out.save(buf_pre)
 wb_bytes = buf_pre.getvalue()
-
+month_list = list(months.keys())
 buf_in = io.BytesIO(wb_bytes)
 buf_fixed = io.BytesIO()
-month_list = list(months.keys())
 with _zf.ZipFile(buf_in,'r') as zin, _zf.ZipFile(buf_fixed,'w',_zf.ZIP_DEFLATED) as zout:
     for item in zin.infolist():
         data = zin.read(item.filename)
@@ -726,18 +670,20 @@ with _zf.ZipFile(buf_in,'r') as zin, _zf.ZipFile(buf_fixed,'w',_zf.ZIP_DEFLATED)
         if m:
             chart_num = int(m.group(1))
             xml = data.decode('utf-8')
-            if chart_num <= len(month_list):
-                yr, mo = month_list[chart_num-1]
-                day_list_c = months[(yr,mo)]
-                adm_vals = [stats[str(dt)]['admissions'] for dt in day_list_c]
-                dis_vals = [stats[str(dt)]['discharges'] for dt in day_list_c]
-                left_max = max(15, max(max(adm_vals), max(dis_vals)) + 3)
-                xml = fix_chart_xml(xml, str(yr)+'年'+str(mo)+'月 日別稼働率・入退院数', '日付', left_max=left_max, right_max=110)
-            else:
+            if chart_num == 1:
                 all_adm = [sum(stats[str(dt)]['admissions'] for dt in dl) for dl in months.values()]
                 all_dis = [sum(stats[str(dt)]['discharges'] for dt in dl) for dl in months.values()]
-                left_max = max(max(all_adm), max(all_dis)) + 10
-                xml = fix_chart_xml(xml, str(target_year)+'年 月別稼働率・入退院数', '月', left_max=left_max, right_max=110)
+                lmax = max(max(all_adm), max(all_dis)) + 10
+                xml = fix_chart_xml(xml, str(target_year)+'年 月別稼働率・入退院数', '月', left_max=lmax, right_max=110)
+            else:
+                idx = chart_num - 2
+                if 0 <= idx < len(month_list):
+                    yr, mo = month_list[idx]
+                    dl = months[(yr, mo)]
+                    adm_vals = [stats[str(dt)]['admissions'] for dt in dl]
+                    dis_vals = [stats[str(dt)]['discharges'] for dt in dl]
+                    lmax = max(15, max(max(adm_vals), max(dis_vals))+3)
+                    xml = fix_chart_xml(xml, str(yr)+'年'+str(mo)+'月 日別稼働率・入退院数', '日付', left_max=lmax, right_max=110)
             data = xml.encode('utf-8')
         zout.writestr(item, data)
 
