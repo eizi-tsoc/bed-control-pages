@@ -223,7 +223,8 @@ SUBHDR_BG = 'FFD9E1F2'
 
 def detect_room_id(val):
     if not val: return None
-    v = str(val)
+    import unicodedata
+    v = unicodedata.normalize('NFKC', str(val))
     patterns = [
         (r'307.{0,2}3','307-3'),(r'307.{0,2}4','307-4'),(r'307.{0,2}1','307-1'),
         (r'307.{0,2}5','307-5'),(r'307.{0,2}2','307-2'),
