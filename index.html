@@ -43,7 +43,7 @@
 <div class="card">
   <h1>🏥 病床稼働率レポート生成</h1>
   <p class="subtitle">Excelファイルをアップロードして稼働率レポートを生成します</p>
-  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 2.4</p>
+  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 3.0</p>
 
   <div class="section">
     <label>① Excelファイルを選択</label>
@@ -187,13 +187,83 @@ async function generateReport() {
     setProgress(30);
 
     const result = await pyodide.runPythonAsync(`
-import io, re, base64
+import io, re, base64, zipfile as _zf
 from datetime import datetime, date
 from collections import OrderedDict, Counter
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.chart import LineChart, BarChart, Reference
+
+_NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+
+def _vt(text, sz=1100):
+    return ('<title><tx><rich>'
+            '<a:bodyPr ' + _NS + ' rot="-5400000"/><a:lstStyle ' + _NS + '/>'
+            '<a:p ' + _NS + '><a:pPr><a:defRPr sz="' + str(sz) + '"/></a:pPr>'
+            '<a:r><a:rPr sz="' + str(sz) + '"/><a:t>' + text + '</a:t></a:r></a:p>'
+            '</rich></tx><overlay val="0"/></title>')
+
+def _ht(text, sz=1100):
+    return ('<title><tx><rich>'
+            '<a:bodyPr ' + _NS + '/><a:lstStyle ' + _NS + '/>'
+            '<a:p ' + _NS + '><a:pPr><a:defRPr sz="' + str(sz) + '"/></a:pPr>'
+            '<a:r><a:rPr sz="' + str(sz) + '"/><a:t>' + text + '</a:t></a:r></a:p>'
+            '</rich></tx><overlay val="0"/></title>')
+
+def _ct(text, sz=1400):
+    return ('<title><tx><rich>'
+            '<a:bodyPr ' + _NS + '/><a:lstStyle ' + _NS + '/>'
+            '<a:p ' + _NS + '><a:pPr><a:defRPr sz="' + str(sz) + '" b="1"/></a:pPr>'
+            '<a:r><a:rPr sz="' + str(sz) + '" b="1"/><a:t>' + text + '</a:t></a:r></a:p>'
+            '</rich></tx><overlay val="0"/></title>')
+
+def fix_chart_xml(xml, title, x_title, left_max=15, right_max=110):
+    if '<chart><plotArea>' in xml:
+        xml = xml.replace('<chart><plotArea>', '<chart>' + _ct(title) + '<plotArea>')
+    else:
+        xml = re.sub(r'<chart><title>.*?</title>', '<chart>' + _ct(title), xml, count=1, flags=re.DOTALL)
+    xml = re.sub(r'<cat><numRef>(<f>[^<]+</f>)</numRef></cat>', r'<cat><strRef>\1</strRef></cat>', xml)
+    old_cat = re.search(r'<catAx>.*?</catAx>', xml, re.DOTALL)
+    if old_cat:
+        new_cat = ('<catAx><axId val="200"/>'
+                   '<scaling><orientation val="minMax"/></scaling>'
+                   '<delete val="0"/><axPos val="b"/>' + _ht(x_title) +
+                   '<numFmt formatCode="@" sourceLinked="0"/>'
+                   '<majorTickMark val="out"/><minorTickMark val="none"/>'
+                   '<tickLblPos val="nextTo"/><crossAx val="100"/>'
+                   '<auto val="1"/><lblOffset val="100"/></catAx>')
+        xml = xml.replace(old_cat.group(), new_cat)
+    for vax in re.findall(r'<valAx>.*?</valAx>', xml, re.DOTALL):
+        axid_m = re.search(r'<axId val="(\d+)"', vax)
+        if not axid_m: continue
+        axid = axid_m.group(1)
+        if axid == '100':
+            xml = xml.replace(vax,
+                '<valAx><axId val="100"/>'
+                '<scaling><orientation val="minMax"/><min val="0"/><max val="' + str(left_max) + '"/></scaling>'
+                '<delete val="0"/><axPos val="l"/>' + _vt('入退院数（件）') +
+                '<majorGridlines/><numFmt formatCode="0" sourceLinked="0"/>'
+                '<majorTickMark val="out"/><minorTickMark val="none"/>'
+                '<tickLblPos val="nextTo"/><crossAx val="200"/></valAx>')
+        elif axid == '300':
+            xml = xml.replace(vax,
+                '<valAx><axId val="300"/>'
+                '<scaling><orientation val="minMax"/><min val="0"/><max val="' + str(right_max) + '"/></scaling>'
+                '<delete val="0"/><axPos val="r"/>' + _vt('稼働率(%)') +
+                '<numFmt formatCode="0&quot;%&quot;" sourceLinked="0"/>'
+                '<majorTickMark val="out"/><minorTickMark val="none"/>'
+                '<tickLblPos val="nextTo"/><crossAx val="200"/><crosses val="max"/></valAx>')
+    old_leg = re.search(r'<legend>.*?</legend>', xml, re.DOTALL)
+    if old_leg:
+        xml = xml.replace(old_leg.group(),
+            '<legend><legendPos val="r"/>'
+            '<spPr><a:solidFill ' + _NS + '><a:srgbClr val="FFFFFF"/></a:solidFill>'
+            '<a:ln ' + _NS + ' w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></spPr>'
+            '<txPr><a:bodyPr ' + _NS + '/><a:lstStyle ' + _NS + '/>'
+            '<a:p ' + _NS + '><a:pPr><a:defRPr sz="900"/></a:pPr></a:p></txPr>'
+            '</legend>')
+    return xml
 
 PINK   = 'FFFFCCFF'
 BLUE   = 'FFDDEBF7'
@@ -571,16 +641,9 @@ for mi, ((year, month), day_list) in enumerate(months.items()):
 
 # 棒グラフ（月別入退院数）
 bar_s = BarChart()
-bar_s.type = 'col'
-bar_s.grouping = 'clustered'
-bar_s.title = '月別稼働率・入退院数'
-bar_s.y_axis.title = '件数'
-bar_s.y_axis.axId = 200
-bar_s.y_axis.numFmt = '0'
-bar_s.x_axis.title = '月'
-bar_s.style = 2
-bar_s.width = 30
-bar_s.height = 16
+bar_s.type = 'col'; bar_s.grouping = 'clustered'
+bar_s.style = 2; bar_s.width = 28; bar_s.height = 14
+bar_s.y_axis.axId = 100; bar_s.x_axis.axId = 200
 
 data_adm_s=Reference(ws_sum,min_col=3,max_col=3,min_row=SUM_CHART_ROW,max_row=SUM_CHART_ROW+n_months)
 data_dis_s=Reference(ws_sum,min_col=4,max_col=4,min_row=SUM_CHART_ROW,max_row=SUM_CHART_ROW+n_months)
@@ -588,22 +651,15 @@ cats_s=Reference(ws_sum,min_col=1,min_row=SUM_CHART_ROW+1,max_row=SUM_CHART_ROW+
 bar_s.add_data(data_adm_s,titles_from_data=True)
 bar_s.add_data(data_dis_s,titles_from_data=True)
 bar_s.set_categories(cats_s)
-bar_s.series[0].spPr.solidFill='ED7D31'
-bar_s.series[1].spPr.solidFill='70AD47'
+bar_s.series[0].spPr.solidFill='4472C4'
+bar_s.series[1].spPr.solidFill='C0504D'
 
-# 折れ線グラフ（月別稼働率）- 第2軸
 line_s = LineChart()
-line_s.y_axis.title = '稼働率(%)'
-line_s.y_axis.axId = 100
-line_s.y_axis.crosses = 'max'
-line_s.y_axis.numFmt = '0"%"'
-line_s.y_axis.scaling.min = 0
-line_s.y_axis.scaling.max = 100
-
+line_s.y_axis.axId = 300; line_s.x_axis.axId = 200; line_s.y_axis.crosses = 'max'
 data_occ_s = Reference(ws_sum, min_col=2, max_col=2, min_row=SUM_CHART_ROW, max_row=SUM_CHART_ROW+n_months)
 line_s.add_data(data_occ_s, titles_from_data=True)
-line_s.series[0].spPr.ln.solidFill='4472C4'
-line_s.series[0].graphicalProperties.line.solidFill='4472C4'
+line_s.series[0].spPr.ln.solidFill='70AD47'
+line_s.series[0].graphicalProperties.line.solidFill='70AD47'
 line_s.series[0].graphicalProperties.line.width=25000
 line_s.series[0].smooth=True
 
@@ -657,8 +713,36 @@ for bi,bed_id in enumerate(all_beds):
 for col,w in zip('ABCDE',[10,16,10,10,12]):
     ws_room.column_dimensions[col].width=w
 
-buf=io.BytesIO(); wb_out.save(buf); buf.seek(0)
-base64.b64encode(buf.read()).decode()
+buf_pre=io.BytesIO(); wb_out.save(buf_pre)
+wb_bytes = buf_pre.getvalue()
+
+buf_in = io.BytesIO(wb_bytes)
+buf_fixed = io.BytesIO()
+month_list = list(months.keys())
+with _zf.ZipFile(buf_in,'r') as zin, _zf.ZipFile(buf_fixed,'w',_zf.ZIP_DEFLATED) as zout:
+    for item in zin.infolist():
+        data = zin.read(item.filename)
+        m = re.search(r'xl/charts/chart(\d+)\.xml', item.filename)
+        if m:
+            chart_num = int(m.group(1))
+            xml = data.decode('utf-8')
+            if chart_num <= len(month_list):
+                yr, mo = month_list[chart_num-1]
+                day_list_c = months[(yr,mo)]
+                adm_vals = [stats[str(dt)]['admissions'] for dt in day_list_c]
+                dis_vals = [stats[str(dt)]['discharges'] for dt in day_list_c]
+                left_max = max(15, max(max(adm_vals), max(dis_vals)) + 3)
+                xml = fix_chart_xml(xml, str(yr)+'年'+str(mo)+'月 日別稼働率・入退院数', '日付', left_max=left_max, right_max=110)
+            else:
+                all_adm = [sum(stats[str(dt)]['admissions'] for dt in dl) for dl in months.values()]
+                all_dis = [sum(stats[str(dt)]['discharges'] for dt in dl) for dl in months.values()]
+                left_max = max(max(all_adm), max(all_dis)) + 10
+                xml = fix_chart_xml(xml, str(target_year)+'年 月別稼働率・入退院数', '月', left_max=left_max, right_max=110)
+            data = xml.encode('utf-8')
+        zout.writestr(item, data)
+
+buf_fixed.seek(0)
+base64.b64encode(buf_fixed.read()).decode()
 `);
 
     setProgress(90);
