@@ -43,7 +43,7 @@
 <div class="card">
   <h1>🏥 病床稼働率レポート生成</h1>
   <p class="subtitle">Excelファイルをアップロードして稼働率レポートを生成します</p>
-  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 4.4</p>
+  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 4.5</p>
 
   <div class="section">
     <label>① Excelファイルを選択</label>
@@ -700,7 +700,7 @@ def make_month_sheet(ws, year, month, day_list):
     cd_end   = cd_start + n
     adm_v = [stats[str(dt)]['admissions'] for dt in day_list]
     dis_v = [stats[str(dt)]['discharges'] for dt in day_list]
-    m_lmax = 25
+    m_lmax = 15
     month_combo_xml = make_combo_xml('_data', n, 'B', 'C', 'D', 'A',
         str(year)+'年'+str(month)+'月 日別稼働率・入退院数', '日付', m_lmax, 110)
     chart_m = ComboChart(month_combo_xml, width=30, height=14)
