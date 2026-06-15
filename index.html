@@ -43,7 +43,7 @@
 <div class="card">
   <h1>🏥 病床稼働率レポート生成</h1>
   <p class="subtitle">Excelファイルをアップロードして稼働率レポートを生成します</p>
-  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 4.5</p>
+  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 4.7</p>
 
   <div class="section">
     <label>① Excelファイルを選択</label>
@@ -234,15 +234,17 @@ def detect_room_id(val):
     return None
 
 def make_combo_xml(sheet_title, n_rows, adm_col, dis_col, occ_col, cat_col,
-                   title, x_title, left_max, right_max):
+                   title, x_title, left_max, right_max, start_row=2):
     NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
-    cat_r = "'"+sheet_title+"'!$"+cat_col+"$2:$"+cat_col+"$"+str(1+n_rows)
-    adm_r = "'"+sheet_title+"'!$"+adm_col+"$2:$"+adm_col+"$"+str(1+n_rows)
-    dis_r = "'"+sheet_title+"'!$"+dis_col+"$2:$"+dis_col+"$"+str(1+n_rows)
-    occ_r = "'"+sheet_title+"'!$"+occ_col+"$2:$"+occ_col+"$"+str(1+n_rows)
-    adm_h = "'"+sheet_title+"'!"+adm_col+"1"
-    dis_h = "'"+sheet_title+"'!"+dis_col+"1"
-    occ_h = "'"+sheet_title+"'!"+occ_col+"1"
+    hdr_row = start_row - 1
+    end_row  = start_row + n_rows - 1
+    cat_r = "'"+sheet_title+"'!$"+cat_col+"$"+str(start_row)+":$"+cat_col+"$"+str(end_row)
+    adm_r = "'"+sheet_title+"'!$"+adm_col+"$"+str(start_row)+":$"+adm_col+"$"+str(end_row)
+    dis_r = "'"+sheet_title+"'!$"+dis_col+"$"+str(start_row)+":$"+dis_col+"$"+str(end_row)
+    occ_r = "'"+sheet_title+"'!$"+occ_col+"$"+str(start_row)+":$"+occ_col+"$"+str(end_row)
+    adm_h = "'"+sheet_title+"'!"+adm_col+str(hdr_row)
+    dis_h = "'"+sheet_title+"'!"+dis_col+str(hdr_row)
+    occ_h = "'"+sheet_title+"'!"+occ_col+str(hdr_row)
     left_lbl = '入退院数（件）'
     right_lbl = '稼働率(%)'
     return ''.join([
@@ -275,7 +277,7 @@ def make_combo_xml(sheet_title, n_rows, adm_col, dis_col, occ_col, cat_col,
         '<crossAx val="100"/><auto val="1"/><lblOffset val="100"/></catAx>',
         '<valAx><axId val="100"/>',
         '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(left_max)+'"/></scaling>',
-        '<delete val="0"/><axPos val="l"/>',
+        '<delete val="0"/><axPos val="l"/><auto val="0"/>',
         '<title><tx><rich><a:bodyPr rot="-5400000"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000"/></a:pPr><a:r><a:rPr sz="1000"/><a:t>'+left_lbl+'</a:t></a:r></a:p></rich></tx><overlay val="0"/></title>',
         '<majorGridlines/><numFmt formatCode="0" sourceLinked="0"/>',
         '<majorTickMark val="out"/><minorTickMark val="none"/><tickLblPos val="nextTo"/>',
@@ -283,7 +285,7 @@ def make_combo_xml(sheet_title, n_rows, adm_col, dis_col, occ_col, cat_col,
         '<crossAx val="200"/></valAx>',
         '<valAx><axId val="300"/>',
         '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(right_max)+'"/></scaling>',
-        '<delete val="0"/><axPos val="r"/>',
+        '<delete val="0"/><axPos val="r"/><auto val="0"/>',
         '<title><tx><rich><a:bodyPr rot="-5400000"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000"/></a:pPr><a:r><a:rPr sz="1000"/><a:t>'+right_lbl+'</a:t></a:r></a:p></rich></tx><overlay val="0"/></title>',
         '<numFmt formatCode="0&quot;%&quot;" sourceLinked="0"/>',
         '<majorTickMark val="out"/><minorTickMark val="none"/><tickLblPos val="nextTo"/>',
@@ -338,15 +340,17 @@ def _patched_wc(self):
 _EW._write_charts = _patched_wc
 
 def make_combo_xml(sheet_title, n_rows, adm_col, dis_col, occ_col, cat_col,
-                   title, x_title, left_max, right_max):
+                   title, x_title, left_max, right_max, start_row=2):
     NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
-    cat_r = "'"+sheet_title+"'!$"+cat_col+"$2:$"+cat_col+"$"+str(1+n_rows)
-    adm_r = "'"+sheet_title+"'!$"+adm_col+"$2:$"+adm_col+"$"+str(1+n_rows)
-    dis_r = "'"+sheet_title+"'!$"+dis_col+"$2:$"+dis_col+"$"+str(1+n_rows)
-    occ_r = "'"+sheet_title+"'!$"+occ_col+"$2:$"+occ_col+"$"+str(1+n_rows)
-    adm_h = "'"+sheet_title+"'!"+adm_col+"1"
-    dis_h = "'"+sheet_title+"'!"+dis_col+"1"
-    occ_h = "'"+sheet_title+"'!"+occ_col+"1"
+    hdr_row = start_row - 1
+    end_row  = start_row + n_rows - 1
+    cat_r = "'"+sheet_title+"'!$"+cat_col+"$"+str(start_row)+":$"+cat_col+"$"+str(end_row)
+    adm_r = "'"+sheet_title+"'!$"+adm_col+"$"+str(start_row)+":$"+adm_col+"$"+str(end_row)
+    dis_r = "'"+sheet_title+"'!$"+dis_col+"$"+str(start_row)+":$"+dis_col+"$"+str(end_row)
+    occ_r = "'"+sheet_title+"'!$"+occ_col+"$"+str(start_row)+":$"+occ_col+"$"+str(end_row)
+    adm_h = "'"+sheet_title+"'!"+adm_col+str(hdr_row)
+    dis_h = "'"+sheet_title+"'!"+dis_col+str(hdr_row)
+    occ_h = "'"+sheet_title+"'!"+occ_col+str(hdr_row)
     left_lbl = '\u5165\u9000\u9662\u6570\uff08\u4ef6\uff09'
     right_lbl = '\u7a3c\u50cd\u7387(%)'
     lines = [
@@ -380,7 +384,7 @@ def make_combo_xml(sheet_title, n_rows, adm_col, dis_col, occ_col, cat_col,
         '<crossAx val="100"/><auto val="1"/><lblOffset val="100"/></catAx>',
         '<valAx><axId val="100"/>',
         '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(left_max)+'"/></scaling>',
-        '<delete val="0"/><axPos val="l"/>',
+        '<delete val="0"/><axPos val="l"/><auto val="0"/>',
         '<title><tx><rich><a:bodyPr rot="-5400000"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000"/></a:pPr><a:r><a:rPr sz="1000"/><a:t>'+left_lbl+'</a:t></a:r></a:p></rich></tx><overlay val="0"/></title>',
         '<majorGridlines/><numFmt formatCode="0" sourceLinked="0"/>',
         '<majorTickMark val="out"/><minorTickMark val="none"/><tickLblPos val="nextTo"/>',
@@ -388,7 +392,7 @@ def make_combo_xml(sheet_title, n_rows, adm_col, dis_col, occ_col, cat_col,
         '<crossAx val="200"/></valAx>',
         '<valAx><axId val="300"/>',
         '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(right_max)+'"/></scaling>',
-        '<delete val="0"/><axPos val="r"/>',
+        '<delete val="0"/><axPos val="r"/><auto val="0"/>',
         '<title><tx><rich><a:bodyPr rot="-5400000"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000"/></a:pPr><a:r><a:rPr sz="1000"/><a:t>'+right_lbl+'</a:t></a:r></a:p></rich></tx><overlay val="0"/></title>',
         '<numFmt formatCode="0&quot;%&quot;" sourceLinked="0"/>',
         '<majorTickMark val="out"/><minorTickMark val="none"/><tickLblPos val="nextTo"/>',
@@ -702,7 +706,8 @@ def make_month_sheet(ws, year, month, day_list):
     dis_v = [stats[str(dt)]['discharges'] for dt in day_list]
     m_lmax = 15
     month_combo_xml = make_combo_xml('_data', n, 'B', 'C', 'D', 'A',
-        str(year)+'年'+str(month)+'月 日別稼働率・入退院数', '日付', m_lmax, 110)
+        str(year)+'年'+str(month)+'月 日別稼働率・入退院数', '日付', m_lmax, 110,
+        start_row=cd_start+1)
     chart_m = ComboChart(month_combo_xml, width=30, height=14)
     ws.add_chart(chart_m,'A'+str(OCC_ROW+3))
 
