@@ -492,19 +492,33 @@ for col,w in zip('ABCDEFGHI',[8,10,12,10,10,12,12,12,12]):
 
 # ─── 総合サマリー複合グラフ（月別稼働率折れ線 + 入退院数棒グラフ）───
 SUM_CHART_ROW = wd_start + 10
-ws_sum.cell(row=SUM_CHART_ROW, column=1).value = '月'
-ws_sum.cell(row=SUM_CHART_ROW, column=2).value = '稼働率(%)'
-ws_sum.cell(row=SUM_CHART_ROW, column=3).value = '入院数'
-ws_sum.cell(row=SUM_CHART_ROW, column=4).value = '退院数'
+n_months = len(months)
+
+# データ表ヘッダー
+hdr_labels = ['月','稼働率(%)','入院数','退院数']
+hdr_colors = [SUBHDR_BG, 'FFD9E1F2', 'FFFCE4D6', 'FFE2EFDA']
+for ci, (label, bg) in enumerate(zip(hdr_labels, hdr_colors)):
+    cell = ws_sum.cell(row=SUM_CHART_ROW, column=ci+1)
+    cell.value = label
+    cell.font = Font(bold=True, size=10)
+    cell.fill = fill(bg)
+    cell.alignment = Alignment(horizontal='center', vertical='center')
+    cell.border = bdr()
+
 for mi, ((year, month), day_list) in enumerate(months.items()):
     sl = [stats[str(dt)] for dt in day_list]; n_m = len(sl)
     avg_occ = round(sum(s['total'] for s in sl)/(n_m*TOTAL_BEDS)*100, 1)
-    ws_sum.cell(row=SUM_CHART_ROW+1+mi, column=1).value = f'{month}月'
-    ws_sum.cell(row=SUM_CHART_ROW+1+mi, column=2).value = avg_occ
-    ws_sum.cell(row=SUM_CHART_ROW+1+mi, column=3).value = sum(s['admissions'] for s in sl)
-    ws_sum.cell(row=SUM_CHART_ROW+1+mi, column=4).value = sum(s['discharges'] for s in sl)
-
-n_months = len(months)
+    tot_adm = sum(s['admissions'] for s in sl)
+    tot_dis = sum(s['discharges'] for s in sl)
+    row_vals = [f'{month}月', avg_occ, tot_adm, tot_dis]
+    row_bgs  = [SUBHDR_BG, 'FFD9E1F2', 'FFFCE4D6', 'FFE2EFDA']
+    for ci, (val, bg) in enumerate(zip(row_vals, row_bgs)):
+        cell = ws_sum.cell(row=SUM_CHART_ROW+1+mi, column=ci+1)
+        cell.value = val
+        cell.font = Font(size=10)
+        cell.fill = fill(bg)
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = bdr()
 
 # 棒グラフ（月別入退院数）
 bar_s = BarChart()
@@ -513,14 +527,17 @@ bar_s.grouping = 'clustered'
 bar_s.title = '月別稼働率・入退院数'
 bar_s.y_axis.title = '件数'
 bar_s.y_axis.axId = 200
-bar_s.style = 10
-bar_s.width = 25
-bar_s.height = 14
+bar_s.y_axis.numFmt = '0'
+bar_s.x_axis.title = '月'
+bar_s.style = 2
+bar_s.width = 30
+bar_s.height = 16
 
 data_adm_s = Reference(ws_sum, min_col=3, max_col=4, min_row=SUM_CHART_ROW, max_row=SUM_CHART_ROW+n_months)
 cats_s = Reference(ws_sum, min_col=1, min_row=SUM_CHART_ROW+1, max_row=SUM_CHART_ROW+n_months)
 bar_s.add_data(data_adm_s, titles_from_data=True)
 bar_s.set_categories(cats_s)
+bar_s.series[0].graphicalProperties.solidFill = 'ED7D31'
 bar_s.series[0].graphicalProperties.solidFill = 'ED7D31'
 bar_s.series[1].graphicalProperties.solidFill = '70AD47'
 
@@ -529,6 +546,7 @@ line_s = LineChart()
 line_s.y_axis.title = '稼働率(%)'
 line_s.y_axis.axId = 100
 line_s.y_axis.crosses = 'max'
+line_s.y_axis.numFmt = '0"%"'
 line_s.y_axis.scaling.min = 0
 line_s.y_axis.scaling.max = 100
 
