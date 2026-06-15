@@ -43,7 +43,7 @@
 <div class="card">
   <h1>🏥 病床稼働率レポート生成</h1>
   <p class="subtitle">Excelファイルをアップロードして稼働率レポートを生成します</p>
-  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 4.3</p>
+  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 4.4</p>
 
   <div class="section">
     <label>① Excelファイルを選択</label>
@@ -279,6 +279,7 @@ def make_combo_xml(sheet_title, n_rows, adm_col, dis_col, occ_col, cat_col,
         '<title><tx><rich><a:bodyPr rot="-5400000"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000"/></a:pPr><a:r><a:rPr sz="1000"/><a:t>'+left_lbl+'</a:t></a:r></a:p></rich></tx><overlay val="0"/></title>',
         '<majorGridlines/><numFmt formatCode="0" sourceLinked="0"/>',
         '<majorTickMark val="out"/><minorTickMark val="none"/><tickLblPos val="nextTo"/>',
+        '<majorUnit val="5"/>',
         '<crossAx val="200"/></valAx>',
         '<valAx><axId val="300"/>',
         '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(right_max)+'"/></scaling>',
@@ -383,6 +384,7 @@ def make_combo_xml(sheet_title, n_rows, adm_col, dis_col, occ_col, cat_col,
         '<title><tx><rich><a:bodyPr rot="-5400000"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000"/></a:pPr><a:r><a:rPr sz="1000"/><a:t>'+left_lbl+'</a:t></a:r></a:p></rich></tx><overlay val="0"/></title>',
         '<majorGridlines/><numFmt formatCode="0" sourceLinked="0"/>',
         '<majorTickMark val="out"/><minorTickMark val="none"/><tickLblPos val="nextTo"/>',
+        '<majorUnit val="5"/>',
         '<crossAx val="200"/></valAx>',
         '<valAx><axId val="300"/>',
         '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(right_max)+'"/></scaling>',
