@@ -43,7 +43,7 @@
 <div class="card">
   <h1>🏥 病床稼働率レポート生成</h1>
   <p class="subtitle">Excelファイルをアップロードして稼働率レポートを生成します</p>
-  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 3.5</p>
+  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 4.0</p>
 
   <div class="section">
     <label>① Excelファイルを選択</label>
@@ -193,7 +193,7 @@ from collections import OrderedDict, Counter
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from openpyxl.chart import LineChart, BarChart, Reference
+from openpyxl.chart import BarChart, Reference
 
 PINK='FFFFCCFF'; BLUE='FFDDEBF7'; ORANGE='FFED7D31'; TOTAL_BEDS=19
 WEEKDAYS={0:'月',1:'火',2:'水',3:'木',4:'金',5:'土',6:'日'}
@@ -233,94 +233,69 @@ def detect_room_id(val):
         if re.search(pat,v): return rid
     return None
 
-_NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
-
-def _vt(text, sz=1100):
-    return ('<title><tx><rich>'
-            '<a:bodyPr '+_NS+' rot="-5400000"/><a:lstStyle '+_NS+'/>'
-            '<a:p '+_NS+'><a:pPr><a:defRPr sz="'+str(sz)+'"/></a:pPr>'
-            '<a:r><a:rPr sz="'+str(sz)+'"/><a:t>'+text+'</a:t></a:r></a:p>'
-            '</rich></tx><overlay val="0"/></title>')
-
-def _ht(text, sz=1100):
-    return ('<title><tx><rich>'
-            '<a:bodyPr '+_NS+'/><a:lstStyle '+_NS+'/>'
-            '<a:p '+_NS+'><a:pPr><a:defRPr sz="'+str(sz)+'"/></a:pPr>'
-            '<a:r><a:rPr sz="'+str(sz)+'"/><a:t>'+text+'</a:t></a:r></a:p>'
-            '</rich></tx><overlay val="0"/></title>')
-
-def _ct(text, sz=1400):
-    return ('<title><tx><rich>'
-            '<a:bodyPr '+_NS+'/><a:lstStyle '+_NS+'/>'
-            '<a:p '+_NS+'><a:pPr><a:defRPr sz="'+str(sz)+'" b="1"/></a:pPr>'
-            '<a:r><a:rPr sz="'+str(sz)+'" b="1"/><a:t>'+text+'</a:t></a:r></a:p>'
-            '</rich></tx><overlay val="0"/></title>')
-
-def fix_chart_xml(xml, title, x_title, left_max=15, right_max=110):
-    if '<chart><plotArea>' in xml:
-        xml = xml.replace('<chart><plotArea>', '<chart>'+_ct(title)+'<plotArea>')
-    else:
-        xml = re.sub(r'<chart><title>.*?</title>', '<chart>'+_ct(title), xml, count=1, flags=re.DOTALL)
-    xml = xml.replace('<cat><numRef>', '<cat><strRef>').replace('</numRef></cat>', '</strRef></cat>')
-    old_cat = re.search(r'<catAx>.*?</catAx>', xml, re.DOTALL)
-    if old_cat:
-        new_cat = ('<catAx><axId val="200"/>'
-                   '<scaling><orientation val="minMax"/></scaling>'
-                   '<delete val="0"/><axPos val="b"/>'+_ht(x_title)+
-                   '<numFmt formatCode="@" sourceLinked="0"/>'
-                   '<majorTickMark val="out"/><minorTickMark val="none"/>'
-                   '<tickLblPos val="nextTo"/><crossAx val="100"/>'
-                   '<auto val="1"/><lblOffset val="100"/></catAx>')
-        xml = xml.replace(old_cat.group(), new_cat)
-    for vax in re.findall(r'<valAx>.*?</valAx>', xml, re.DOTALL):
-        axid_m = re.search(r'<axId val="(\d+)"', vax)
-        if not axid_m: continue
-        axid = axid_m.group(1)
-        if axid == '100':
-            xml = xml.replace(vax,
-                '<valAx><axId val="100"/>'
-                '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(left_max)+'"/></scaling>'
-                '<delete val="0"/><axPos val="l"/>'+_vt('入退院数（件）')+
-                '<majorGridlines/><numFmt formatCode="0" sourceLinked="0"/>'
-                '<majorTickMark val="out"/><minorTickMark val="none"/>'
-                '<tickLblPos val="nextTo"/><crossAx val="200"/></valAx>')
-        elif axid == '300':
-            xml = xml.replace(vax,
-                '<valAx><axId val="300"/>'
-                '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(right_max)+'"/></scaling>'
-                '<delete val="0"/><axPos val="r"/>'+_vt('稼働率(%)')+
-                '<numFmt formatCode="0&quot;%&quot;" sourceLinked="0"/>'
-                '<majorTickMark val="out"/><minorTickMark val="none"/>'
-                '<tickLblPos val="nextTo"/><crossAx val="200"/><crosses val="max"/></valAx>')
-    old_leg = re.search(r'<legend>.*?</legend>', xml, re.DOTALL)
-    if old_leg:
-        xml = xml.replace(old_leg.group(),
-            '<legend><legendPos val="r"/>'
-            '<spPr><a:solidFill '+_NS+'><a:srgbClr val="FFFFFF"/></a:solidFill>'
-            '<a:ln '+_NS+' w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></spPr>'
-            '<txPr><a:bodyPr '+_NS+'/><a:lstStyle '+_NS+'/>'
-            '<a:p '+_NS+'><a:pPr><a:defRPr sz="900"/></a:pPr></a:p></txPr>'
-            '</legend>')
-    return xml
-
-def make_combo_chart(ws_src, r_start, r_end, width=28, height=14):
-    bar=BarChart(); bar.type='col'; bar.grouping='clustered'
-    bar.style=2; bar.width=width; bar.height=height
-    bar.y_axis.axId=100; bar.x_axis.axId=200
-    bar.add_data(Reference(ws_src,min_col=2,max_col=2,min_row=r_start,max_row=r_end),titles_from_data=True)
-    bar.add_data(Reference(ws_src,min_col=3,max_col=3,min_row=r_start,max_row=r_end),titles_from_data=True)
-    bar.set_categories(Reference(ws_src,min_col=1,min_row=r_start+1,max_row=r_end))
-    bar.series[0].spPr.solidFill='4472C4'
-    bar.series[1].spPr.solidFill='C0504D'
-    line=LineChart()
-    line.y_axis.axId=300; line.x_axis.axId=200; line.y_axis.crosses='max'
-    line.add_data(Reference(ws_src,min_col=4,max_col=4,min_row=r_start,max_row=r_end),titles_from_data=True)
-    line.series[0].spPr.ln.solidFill='70AD47'
-    line.series[0].graphicalProperties.line.solidFill='70AD47'
-    line.series[0].graphicalProperties.line.width=25000
-    line.series[0].smooth=True
-    bar+=line
-    return bar
+def make_combo_xml(sheet_title, n_rows, adm_col, dis_col, occ_col, cat_col,
+                   title, x_title, left_max, right_max):
+    NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+    cat_r = "'"+sheet_title+"'!$"+cat_col+"$2:$"+cat_col+"$"+str(1+n_rows)
+    adm_r = "'"+sheet_title+"'!$"+adm_col+"$2:$"+adm_col+"$"+str(1+n_rows)
+    dis_r = "'"+sheet_title+"'!$"+dis_col+"$2:$"+dis_col+"$"+str(1+n_rows)
+    occ_r = "'"+sheet_title+"'!$"+occ_col+"$2:$"+occ_col+"$"+str(1+n_rows)
+    adm_h = "'"+sheet_title+"'!"+adm_col+"1"
+    dis_h = "'"+sheet_title+"'!"+dis_col+"1"
+    occ_h = "'"+sheet_title+"'!"+occ_col+"1"
+    left_lbl = '\u5165\u9000\u9662\u6570\uff08\u4ef6\uff09'
+    right_lbl = '\u7a3c\u50cd\u7387(%)'
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<chartSpace xmlns="http://schemas.openxmlformats.org/drawingml/2006/chart" '+NS+' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+        '<chart>',
+        '<title><tx><rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1400" b="1"/></a:pPr><a:r><a:rPr sz="1400" b="1"/><a:t>'+title+'</a:t></a:r></a:p></rich></tx><overlay val="0"/></title>',
+        '<plotArea>',
+        '<barChart><barDir val="col"/><grouping val="clustered"/>',
+        '<ser><idx val="0"/><order val="0"/><tx><strRef><f>'+adm_h+'</f></strRef></tx>',
+        '<spPr><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill></spPr>',
+        '<cat><strRef><f>'+cat_r+'</f></strRef></cat>',
+        '<val><numRef><f>'+adm_r+'</f></numRef></val></ser>',
+        '<ser><idx val="1"/><order val="1"/><tx><strRef><f>'+dis_h+'</f></strRef></tx>',
+        '<spPr><a:solidFill><a:srgbClr val="C0504D"/></a:solidFill></spPr>',
+        '<cat><strRef><f>'+cat_r+'</f></strRef></cat>',
+        '<val><numRef><f>'+dis_r+'</f></numRef></val></ser>',
+        '<axId val="200"/><axId val="100"/></barChart>',
+        '<lineChart><grouping val="standard"/>',
+        '<ser><idx val="2"/><order val="2"/><tx><strRef><f>'+occ_h+'</f></strRef></tx>',
+        '<spPr><a:ln w="25000"><a:solidFill><a:srgbClr val="70AD47"/></a:solidFill></a:ln></spPr>',
+        '<cat><strRef><f>'+cat_r+'</f></strRef></cat>',
+        '<val><numRef><f>'+occ_r+'</f></numRef></val>',
+        '<smooth val="1"/></ser>',
+        '<axId val="200"/><axId val="300"/></lineChart>',
+        '<catAx><axId val="200"/><scaling><orientation val="minMax"/></scaling>',
+        '<delete val="0"/><axPos val="b"/>',
+        '<title><tx><rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000"/></a:pPr><a:r><a:rPr sz="1000"/><a:t>'+x_title+'</a:t></a:r></a:p></rich></tx><overlay val="0"/></title>',
+        '<numFmt formatCode="@" sourceLinked="0"/>',
+        '<majorTickMark val="out"/><minorTickMark val="none"/><tickLblPos val="nextTo"/>',
+        '<crossAx val="100"/><auto val="1"/><lblOffset val="100"/></catAx>',
+        '<valAx><axId val="100"/>',
+        '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(left_max)+'"/></scaling>',
+        '<delete val="0"/><axPos val="l"/>',
+        '<title><tx><rich><a:bodyPr rot="-5400000"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000"/></a:pPr><a:r><a:rPr sz="1000"/><a:t>'+left_lbl+'</a:t></a:r></a:p></rich></tx><overlay val="0"/></title>',
+        '<majorGridlines/><numFmt formatCode="0" sourceLinked="0"/>',
+        '<majorTickMark val="out"/><minorTickMark val="none"/><tickLblPos val="nextTo"/>',
+        '<crossAx val="200"/></valAx>',
+        '<valAx><axId val="300"/>',
+        '<scaling><orientation val="minMax"/><min val="0"/><max val="'+str(right_max)+'"/></scaling>',
+        '<delete val="0"/><axPos val="r"/>',
+        '<title><tx><rich><a:bodyPr rot="-5400000"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000"/></a:pPr><a:r><a:rPr sz="1000"/><a:t>'+right_lbl+'</a:t></a:r></a:p></rich></tx><overlay val="0"/></title>',
+        '<numFmt formatCode="0&quot;%&quot;" sourceLinked="0"/>',
+        '<majorTickMark val="out"/><minorTickMark val="none"/><tickLblPos val="nextTo"/>',
+        '<crossAx val="200"/><crosses val="max"/></valAx>',
+        '</plotArea>',
+        '<legend><legendPos val="r"/>',
+        '<spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>',
+        '<a:ln w="9525"><a:solidFill><a:srgbClr val="BFBFBF"/></a:solidFill></a:ln></spPr>',
+        '<txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900"/></a:pPr></a:p></txPr>',
+        '</legend><plotVisOnly val="1"/></chart></chartSpace>',
+    ]
+    return ''.join(lines)
 
 raw = bytes(file_bytes)
 
@@ -531,8 +506,11 @@ for ri, wd in enumerate(['月','火','水','木','金','土','日']):
 for col, w in zip('ABCDEFGHI', [8,10,12,10,10,12,12,12,12]):
     ws_sum.column_dimensions[col].width = w
 
-chart_sum = make_combo_chart(ws_cd, sum_start, sum_start+n_months, width=26, height=14)
-ws_sum.add_chart(chart_sum, 'A'+str(wd_start+10))
+sum_chart_row = wd_start + 10
+bar_ph = BarChart(); bar_ph.type='col'; bar_ph.width=26; bar_ph.height=14
+bar_ph.add_data(Reference(ws_cd,min_col=2,max_col=3,min_row=sum_start,max_row=sum_start+n_months),titles_from_data=True)
+bar_ph.set_categories(Reference(ws_cd,min_col=1,min_row=sum_start+1,max_row=sum_start+n_months))
+ws_sum.add_chart(bar_ph,'A'+str(sum_chart_row))
 
 def make_month_sheet(ws, year, month, day_list):
     ws.freeze_panes = 'C4'
@@ -579,9 +557,9 @@ def make_month_sheet(ws, year, month, day_list):
         ws.row_dimensions[row].height=14
     for row, label, key, bg in [
         (MALE_ROW,'当日の男性患者数','male','FFD6E4F7'),
-        (FEM_ROW, '当日の女性患者数','female','FFFFE0EF'),
-        (ADM_ROW, '当日の入院実数','admissions','FFE2EFDA'),
-        (DIS_ROW, '当日の退院実数','discharges','FFFFE699'),
+        (FEM_ROW,'当日の女性患者数','female','FFFFE0EF'),
+        (ADM_ROW,'当日の入院実数','admissions','FFE2EFDA'),
+        (DIS_ROW,'当日の退院実数','discharges','FFFFE699'),
     ]:
         ws.merge_cells(start_row=row,start_column=1,end_row=row,end_column=2)
         lc = ws.cell(row=row,column=1)
@@ -612,15 +590,20 @@ def make_month_sheet(ws, year, month, day_list):
         ws.column_dimensions[get_column_letter(3+j)].width=5
     cd_start = chart_data_offsets[(year,month)]
     cd_end   = cd_start + n
-    adm_vals = [stats[str(dt)]['admissions'] for dt in day_list]
-    dis_vals = [stats[str(dt)]['discharges'] for dt in day_list]
-    left_max = max(15, max(max(adm_vals), max(dis_vals))+3)
-    chart_m = make_combo_chart(ws_cd, cd_start, cd_end, width=30, height=14)
-    ws.add_chart(chart_m, 'A'+str(OCC_ROW+3))
+    bar_m = BarChart(); bar_m.type='col'; bar_m.width=30; bar_m.height=14
+    bar_m.add_data(Reference(ws_cd,min_col=2,max_col=3,min_row=cd_start,max_row=cd_end),titles_from_data=True)
+    bar_m.set_categories(Reference(ws_cd,min_col=1,min_row=cd_start+1,max_row=cd_end))
+    ws.add_chart(bar_m,'A'+str(OCC_ROW+3))
 
+month_chart_info = {}
 for (year, month), day_list in months.items():
     ws_m = wb_out.create_sheet(str(month)+'月')
     make_month_sheet(ws_m, year, month, day_list)
+    dl = months[(year,month)]
+    adm_v = [stats[str(dt)]['admissions'] for dt in dl]
+    dis_v = [stats[str(dt)]['discharges'] for dt in dl]
+    lmax = max(15, max(max(adm_v), max(dis_v))+3)
+    month_chart_info[(year,month)] = {'n': len(dl), 'lmax': lmax, 'cd_start': chart_data_offsets[(year,month)]}
 
 ws_room = wb_out.create_sheet('部屋別稼働')
 ws_room.merge_cells('A1:E1')
@@ -644,36 +627,38 @@ for col, w in zip('ABCDE', [10,16,10,10,12]):
 
 buf_pre = io.BytesIO(); wb_out.save(buf_pre)
 wb_bytes = buf_pre.getvalue()
+
+with _zf.ZipFile(io.BytesIO(wb_bytes),'r') as z:
+    chart_files = sorted([f for f in z.namelist() if re.search(r'xl/charts/chart\d+\.xml', f)])
+
+all_adm_m = [sum(stats[str(dt)]['admissions'] for dt in dl) for dl in months.values()]
+all_dis_m = [sum(stats[str(dt)]['discharges'] for dt in dl) for dl in months.values()]
+sum_lmax = max(max(all_adm_m), max(all_dis_m)) + 10
 month_list = list(months.keys())
-buf_in = io.BytesIO(wb_bytes)
-buf_fixed = io.BytesIO()
-with _zf.ZipFile(buf_in,'r') as zin, _zf.ZipFile(buf_fixed,'w',_zf.ZIP_STORED) as zout:
+
+buf_out2 = io.BytesIO()
+with _zf.ZipFile(io.BytesIO(wb_bytes),'r') as zin, _zf.ZipFile(buf_out2,'w') as zout:
     for item in zin.infolist():
         data = zin.read(item.filename)
         m = re.search(r'xl/charts/chart(\d+)\.xml', item.filename)
         if m:
             chart_num = int(m.group(1))
-            xml = data.decode('utf-8')
             if chart_num == 1:
-                all_adm = [sum(stats[str(dt)]['admissions'] for dt in dl) for dl in months.values()]
-                all_dis = [sum(stats[str(dt)]['discharges'] for dt in dl) for dl in months.values()]
-                lmax = max(max(all_adm), max(all_dis)) + 10
-                xml = fix_chart_xml(xml, str(target_year)+'年 月別稼働率・入退院数', '月', left_max=lmax, right_max=110)
+                combo = make_combo_xml('_data', n_months, 'B', 'C', 'D', 'A',
+                    str(target_year)+'年 月別稼働率・入退院数', '月', sum_lmax, 110)
+                data = combo.encode('utf-8')
             else:
                 idx = chart_num - 2
                 if 0 <= idx < len(month_list):
                     yr, mo = month_list[idx]
-                    dl = months[(yr, mo)]
-                    adm_v = [stats[str(dt)]['admissions'] for dt in dl]
-                    dis_v = [stats[str(dt)]['discharges'] for dt in dl]
-                    lmax = max(15, max(max(adm_v), max(dis_v))+3)
-                    xml = fix_chart_xml(xml, str(yr)+'年'+str(mo)+'月 日別稼働率・入退院数', '日付', left_max=lmax, right_max=110)
-            data = xml.encode('utf-8')
+                    info = month_chart_info[(yr,mo)]
+                    combo = make_combo_xml('_data', info['n'], 'B', 'C', 'D', 'A',
+                        str(yr)+'年'+str(mo)+'月 日別稼働率・入退院数', '日付', info['lmax'], 110)
+                    data = combo.encode('utf-8')
         zout.writestr(item, data)
 
-buf_fixed.seek(0)
-base64.b64encode(buf_fixed.read()).decode()
-
+buf_out2.seek(0)
+base64.b64encode(buf_out2.read()).decode()
 `);
 
     setProgress(90);
