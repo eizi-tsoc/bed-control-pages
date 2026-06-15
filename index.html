@@ -43,7 +43,7 @@
 <div class="card">
   <h1>🏥 病床稼働率レポート生成</h1>
   <p class="subtitle">Excelファイルをアップロードして稼働率レポートを生成します</p>
-  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 3.3</p>
+  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 3.4</p>
 
   <div class="section">
     <label>① Excelファイルを選択</label>
@@ -324,7 +324,6 @@ def make_combo_chart(ws_src, r_start, r_end, width=28, height=14):
 
 raw = bytes(file_bytes)
 
-# 年決定
 wb_tmp = openpyxl.load_workbook(io.BytesIO(raw))
 if selected_year == 'auto':
     best_year, best_count = None, 0
@@ -440,7 +439,6 @@ for dt in target_dates:
 wb_out = openpyxl.Workbook()
 wb_out.remove(wb_out.active)
 
-# 非表示グラフデータシート
 ws_cd = wb_out.create_sheet('_data')
 ws_cd.sheet_state = 'hidden'
 chart_data_offsets = {}
@@ -473,7 +471,6 @@ for mi, ((year, month), day_list) in enumerate(months.items()):
 
 n_months = len(months)
 
-# 総合サマリーシート
 ws_sum = wb_out.create_sheet('総合サマリー')
 ws_sum.freeze_panes = 'A3'
 ws_sum.merge_cells('A1:I1')
@@ -524,7 +521,8 @@ for ri, wd in enumerate(['月','火','水','木','金','土','日']):
     avg_occ    = round(avg_total/TOTAL_BEDS*100, 1)
     row = wd_start + 1 + ri
     for ci, val in enumerate([wd, n, avg_total, avg_male, avg_female,
-                               sum(s['admissions'] for s in sl), sum(s['discharges'] for s in sl), str(avg_occ)+'%']):
+                               sum(s['admissions'] for s in sl),
+                               sum(s['discharges'] for s in sl), str(avg_occ)+'%']):
         cell = ws_sum.cell(row=row, column=ci+1)
         cell.value = val; cell.font = Font(size=10)
         cell.alignment = Alignment(horizontal='center'); cell.border = bdr()
@@ -533,29 +531,24 @@ for ri, wd in enumerate(['月','火','水','木','金','土','日']):
 for col, w in zip('ABCDEFGHI', [8,10,12,10,10,12,12,12,12]):
     ws_sum.column_dimensions[col].width = w
 
-# サマリーグラフ追加
 chart_sum = make_combo_chart(ws_cd, sum_start, sum_start+n_months, width=26, height=14)
 ws_sum.add_chart(chart_sum, 'A'+str(wd_start+10))
 
-# 月別シート
 def make_month_sheet(ws, year, month, day_list):
     ws.freeze_panes = 'C4'
     n = len(day_list)
     BED_START = 4; BED_END = BED_START + len(all_beds) - 1
     MALE_ROW = BED_END+2; FEM_ROW = MALE_ROW+1; ADM_ROW = FEM_ROW+1; DIS_ROW = ADM_ROW+1; OCC_ROW = DIS_ROW+1
-
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=2+n)
     t = ws.cell(row=1, column=1)
     t.value = str(year)+'年'+str(month)+'月 病床稼働状況'
     t.font = Font(bold=True, size=14, color='FFFFFFFF'); t.fill = fill(HEADER_BG)
     t.alignment = Alignment(horizontal='center', vertical='center'); ws.row_dimensions[1].height = 24
-
     for r in (2, 3):
         for c2, v in [(1,'部屋番号'),(2,'タイプ')]:
             cell = ws.cell(row=r, column=c2)
             cell.value = v; cell.font = Font(bold=True, size=9); cell.fill = fill(SUBHDR_BG)
             cell.alignment = Alignment(horizontal='center', vertical='center'); cell.border = bdr()
-
     for j, dt in enumerate(day_list):
         col = 3+j
         dc = ws.cell(row=2, column=col)
@@ -566,7 +559,6 @@ def make_month_sheet(ws, year, month, day_list):
         wc.value = wd; wc.font = Font(bold=True, size=9)
         wc.fill = fill('FFBDD7EE') if wd=='土' else fill('FFFCE4D6') if wd=='日' else fill(SUBHDR_BG)
         wc.alignment = Alignment(horizontal='center'); wc.border = bdr()
-
     for bi, bed_id in enumerate(all_beds):
         row = BED_START+bi
         bc = ws.cell(row=row, column=1)
@@ -585,7 +577,6 @@ def make_month_sheet(ws, year, month, day_list):
             cell.font=Font(size=8,bold=(cur is not None))
             cell.alignment=Alignment(horizontal='center',vertical='center'); cell.border=bdr()
         ws.row_dimensions[row].height=14
-
     for row, label, key, bg in [
         (MALE_ROW,'当日の男性患者数','male','FFD6E4F7'),
         (FEM_ROW, '当日の女性患者数','female','FFFFE0EF'),
@@ -601,7 +592,6 @@ def make_month_sheet(ws, year, month, day_list):
             cell=ws.cell(row=row,column=3+j); cell.value=stats[str(dt)][key]
             cell.font=Font(size=9); cell.fill=fill(bg)
             cell.alignment=Alignment(horizontal='center'); cell.border=bdr()
-
     ws.merge_cells(start_row=OCC_ROW,start_column=1,end_row=OCC_ROW,end_column=2)
     lc=ws.cell(row=OCC_ROW,column=1)
     lc.value='ベッド稼働率'; lc.font=Font(bold=True,size=9); lc.fill=fill(SUBHDR_BG)
@@ -612,18 +602,14 @@ def make_month_sheet(ws, year, month, day_list):
         cell=ws.cell(row=OCC_ROW,column=3+j)
         cell.value=str(pct)+'%'; cell.font=Font(bold=True,size=9); cell.fill=occ_fill(pct)
         cell.alignment=Alignment(horizontal='center'); cell.border=bdr()
-
     for r in range(2, OCC_ROW+1):
         for col_idx in range(1, 3+n):
             cell=ws.cell(row=r,column=col_idx)
             if not cell.border or not cell.border.left.style:
                 cell.border=bdr()
-
     ws.column_dimensions['A'].width=10; ws.column_dimensions['B'].width=14
     for j in range(n):
         ws.column_dimensions[get_column_letter(3+j)].width=5
-
-    # 月別グラフ追加
     cd_start = chart_data_offsets[(year,month)]
     cd_end   = cd_start + n
     adm_vals = [stats[str(dt)]['admissions'] for dt in day_list]
@@ -636,7 +622,6 @@ for (year, month), day_list in months.items():
     ws_m = wb_out.create_sheet(str(month)+'月')
     make_month_sheet(ws_m, year, month, day_list)
 
-# 部屋別稼働シート
 ws_room = wb_out.create_sheet('部屋別稼働')
 ws_room.merge_cells('A1:E1')
 h = ws_room['A1']
@@ -657,7 +642,6 @@ for bi, bed_id in enumerate(all_beds):
 for col, w in zip('ABCDE', [10,16,10,10,12]):
     ws_room.column_dimensions[col].width = w
 
-# 保存してXML修正適用
 buf_pre = io.BytesIO(); wb_out.save(buf_pre)
 wb_bytes = buf_pre.getvalue()
 month_list = list(months.keys())
@@ -680,15 +664,16 @@ with _zf.ZipFile(buf_in,'r') as zin, _zf.ZipFile(buf_fixed,'w',_zf.ZIP_DEFLATED)
                 if 0 <= idx < len(month_list):
                     yr, mo = month_list[idx]
                     dl = months[(yr, mo)]
-                    adm_vals = [stats[str(dt)]['admissions'] for dt in dl]
-                    dis_vals = [stats[str(dt)]['discharges'] for dt in dl]
-                    lmax = max(15, max(max(adm_vals), max(dis_vals))+3)
+                    adm_v = [stats[str(dt)]['admissions'] for dt in dl]
+                    dis_v = [stats[str(dt)]['discharges'] for dt in dl]
+                    lmax = max(15, max(max(adm_v), max(dis_v))+3)
                     xml = fix_chart_xml(xml, str(yr)+'年'+str(mo)+'月 日別稼働率・入退院数', '日付', left_max=lmax, right_max=110)
             data = xml.encode('utf-8')
         zout.writestr(item, data)
 
 buf_fixed.seek(0)
 base64.b64encode(buf_fixed.read()).decode()
+
 `);
 
     setProgress(90);
