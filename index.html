@@ -435,6 +435,12 @@ def make_month_sheet(ws, year, month, day_list):
         cell.value=f'{pct}%'; cell.font=Font(bold=True,size=9); cell.fill=occ_fill(pct)
         cell.alignment=Alignment(horizontal='center'); cell.border=bdr()
 
+    # 全セルに罫線を一括適用（空白セルを含む）
+    for r in range(2, OCC_ROW+1):
+        for col_idx in range(1, 3+n):
+            cell = ws.cell(row=r, column=col_idx)
+            if cell.border is None or cell.border.left.style is None:
+                cell.border = bdr()
     ws.column_dimensions['A'].width=10; ws.column_dimensions['B'].width=14
     for j in range(n): ws.column_dimensions[get_column_letter(3+j)].width=5
 
