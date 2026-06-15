@@ -512,6 +512,127 @@ for bi,bed_id in enumerate(all_beds):
 for col,w in zip('ABCDE',[10,16,10,10,12]):
     ws_room.column_dimensions[col].width=w
 
+# ─── グラフシート作成 ───
+from openpyxl.chart import LineChart, BarChart, Reference
+from openpyxl.chart.series import SeriesLabel
+
+ws_chart = wb_out.create_sheet('グラフ')
+ws_chart.sheet_view.showGridLines = False
+
+# ── データ準備（グラフ用の数値データをシートに書き出し）──
+
+# 月別データ（棒グラフ用）
+ws_chart.cell(row=1,column=1).value = '月'
+ws_chart.cell(row=1,column=2).value = '稼働率(%)'
+ws_chart.cell(row=1,column=3).value = '入院数'
+ws_chart.cell(row=1,column=4).value = '退院数'
+for mi,((year,month),day_list) in enumerate(months.items()):
+    sl=[stats[str(dt)] for dt in day_list]; n=len(sl)
+    avg_occ=round(sum(s['total'] for s in sl)/(n*TOTAL_BEDS)*100,1)
+    tot_adm=sum(s['admissions'] for s in sl)
+    tot_dis=sum(s['discharges'] for s in sl)
+    ws_chart.cell(row=2+mi,column=1).value=f'{month}月'
+    ws_chart.cell(row=2+mi,column=2).value=avg_occ
+    ws_chart.cell(row=2+mi,column=3).value=tot_adm
+    ws_chart.cell(row=2+mi,column=4).value=tot_dis
+
+n_months = len(months)
+
+# 日別データ（折れ線グラフ用）- 列6以降
+ws_chart.cell(row=1,column=6).value='日付'
+ws_chart.cell(row=1,column=7).value='稼働率(%)'
+ws_chart.cell(row=1,column=8).value='入院数'
+ws_chart.cell(row=1,column=9).value='退院数'
+for di,dt in enumerate(target_dates):
+    s=stats[str(dt)]
+    occ=round(s['total']/TOTAL_BEDS*100,1)
+    ws_chart.cell(row=2+di,column=6).value=dt.strftime('%m/%d')
+    ws_chart.cell(row=2+di,column=7).value=occ
+    ws_chart.cell(row=2+di,column=8).value=s['admissions']
+    ws_chart.cell(row=2+di,column=9).value=s['discharges']
+
+n_days_total = len(target_dates)
+
+# ── グラフ1：月別稼働率（棒グラフ）──
+bar = BarChart()
+bar.type = 'col'
+bar.title = '月別稼働率'
+bar.y_axis.title = '稼働率(%)'
+bar.x_axis.title = '月'
+bar.style = 10
+bar.width = 20
+bar.height = 12
+
+data_bar = Reference(ws_chart, min_col=2, max_col=2, min_row=1, max_row=1+n_months)
+cats_bar = Reference(ws_chart, min_col=1, min_row=2, max_row=1+n_months)
+bar.add_data(data_bar, titles_from_data=True)
+bar.set_categories(cats_bar)
+bar.series[0].graphicalProperties.solidFill = '4472C4'
+bar.y_axis.numFmt = '0.0"%"'
+bar.y_axis.scaling.min = 0
+bar.y_axis.scaling.max = 100
+ws_chart.add_chart(bar, 'A' + str(n_months+4))
+
+# ── グラフ2：月別入退院数（棒グラフ）──
+bar2 = BarChart()
+bar2.type = 'col'
+bar2.title = '月別入退院数'
+bar2.y_axis.title = '件数'
+bar2.x_axis.title = '月'
+bar2.style = 10
+bar2.width = 20
+bar2.height = 12
+
+data_adm = Reference(ws_chart, min_col=3, max_col=4, min_row=1, max_row=1+n_months)
+cats_bar2 = Reference(ws_chart, min_col=1, min_row=2, max_row=1+n_months)
+bar2.add_data(data_adm, titles_from_data=True)
+bar2.set_categories(cats_bar2)
+bar2.series[0].graphicalProperties.solidFill = 'ED7D31'
+bar2.series[1].graphicalProperties.solidFill = '70AD47'
+ws_chart.add_chart(bar2, 'L' + str(n_months+4))
+
+# ── グラフ3：日別稼働率（折れ線グラフ）──
+line = LineChart()
+line.title = '日別稼働率の推移'
+line.y_axis.title = '稼働率(%)'
+line.x_axis.title = '日付'
+line.style = 10
+line.width = 40
+line.height = 14
+
+data_line = Reference(ws_chart, min_col=7, max_col=7, min_row=1, max_row=1+n_days_total)
+line.add_data(data_line, titles_from_data=True)
+line.series[0].graphicalProperties.line.solidFill = '4472C4'
+line.series[0].graphicalProperties.line.width = 15000
+line.series[0].smooth = True
+line.y_axis.numFmt = '0.0"%"'
+line.y_axis.scaling.min = 0
+line.y_axis.scaling.max = 100
+
+# X軸ラベルは月ごとに間引いて表示（日数が多いため）
+cats_line = Reference(ws_chart, min_col=6, min_row=2, max_row=1+n_days_total)
+line.set_categories(cats_line)
+ws_chart.add_chart(line, 'A' + str(n_months+4+20))
+
+# ── グラフ4：日別入退院数（折れ線グラフ）──
+line2 = LineChart()
+line2.title = '日別入退院数の推移'
+line2.y_axis.title = '件数'
+line2.x_axis.title = '日付'
+line2.style = 10
+line2.width = 40
+line2.height = 14
+
+data_line2 = Reference(ws_chart, min_col=8, max_col=9, min_row=1, max_row=1+n_days_total)
+line2.add_data(data_line2, titles_from_data=True)
+line2.series[0].graphicalProperties.line.solidFill = 'ED7D31'
+line2.series[0].graphicalProperties.line.width = 15000
+line2.series[1].graphicalProperties.line.solidFill = '70AD47'
+line2.series[1].graphicalProperties.line.width = 15000
+cats_line2 = Reference(ws_chart, min_col=6, min_row=2, max_row=1+n_days_total)
+line2.set_categories(cats_line2)
+ws_chart.add_chart(line2, 'A' + str(n_months+4+20+22))
+
 buf=io.BytesIO(); wb_out.save(buf); buf.seek(0)
 base64.b64encode(buf.read()).decode()
 `);
