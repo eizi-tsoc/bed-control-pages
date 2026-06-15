@@ -128,6 +128,36 @@ area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add(
 area.addEventListener('dragleave', () => area.classList.remove('dragover'));
 area.addEventListener('drop', e => { e.preventDefault(); area.classList.remove('dragover'); loadFile(e.dataTransfer.files[0]); });
 
+async function updateYearOptions(bytes) {
+  if (!pyodide) return;
+  try {
+    pyodide.globals.set('probe_bytes', bytes);
+    const years = await pyodide.runPythonAsync(`
+import io, openpyxl
+from datetime import datetime
+from collections import Counter
+wb = openpyxl.load_workbook(io.BytesIO(bytes(probe_bytes)))
+all_years = {}
+for sname in wb.sheetnames:
+    if '病床' not in sname: continue
+    ws_tmp = wb[sname]
+    for col in range(2, ws_tmp.max_column + 1):
+        cell = ws_tmp.cell(row=1, column=col)
+        if cell.value and isinstance(cell.value, datetime):
+            y = cell.value.year
+            all_years[y] = all_years.get(y, 0) + 1
+','.join(str(y) for y in sorted(all_years.keys(), reverse=True) if all_years[y] > 10)
+`);
+    const sel = document.getElementById('yearSelect');
+    sel.innerHTML = '<option value="auto">自動検出（最も多い年）</option>';
+    years.split(',').filter(y=>y).forEach(y => {
+      const opt = document.createElement('option');
+      opt.value = y; opt.textContent = y + '年';
+      sel.appendChild(opt);
+    });
+  } catch(e) { console.log('year detect error', e); }
+}
+
 function loadFile(file) {
   if (!file) return;
   document.getElementById('fileName').textContent = file.name;
@@ -144,7 +174,7 @@ async function generateReport() {
   if (!pyodide || !fileBytes) return;
   document.getElementById('generateBtn').disabled = true;
   document.getElementById('downloadBtn').style.display = 'none';
-  setStatus('info', '処理中です。しばらくお待ちください...');
+  setStatus("info", "処理中です。しばらくお待ちください..."););
   setProgress(10);
 
   try {
@@ -199,7 +229,37 @@ SUBHDR_BG = 'FFD9E1F2'
 
 # ファイル読み込み
 wb_src = openpyxl.load_workbook(io.BytesIO(bytes(file_bytes)), data_only=True)
-ws = next((wb_src[n] for n in wb_src.sheetnames if '病床' in n), None)
+# 年の決定（先にシート一覧から判断）
+if selected_year == 'auto':
+    # 全病床シートを調べて最もデータが多い年を検出
+    best_year = None
+    best_count = 0
+    for sname in wb_src.sheetnames:
+        if '病床' not in sname: continue
+        ws_tmp = wb_src[sname]
+        tmp_dates = []
+        for col in range(2, ws_tmp.max_column + 1):
+            cell = ws_tmp.cell(row=1, column=col)
+            if cell.value and isinstance(cell.value, datetime):
+                tmp_dates.append(cell.value.date())
+        yc = Counter(d.year for d in tmp_dates)
+        if yc:
+            top_year, top_count = yc.most_common(1)[0]
+            if top_count > best_count:
+                best_count = top_count
+                best_year = top_year
+    target_year = best_year
+else:
+    target_year = int(selected_year)
+
+# 対象年に合うシートを選択（シート名に年が含まれていれば優先）
+ws = None
+for sname in wb_src.sheetnames:
+    if '病床' in sname and str(target_year) in sname:
+        ws = wb_src[sname]
+        break
+if ws is None:
+    ws = next((wb_src[n] for n in wb_src.sheetnames if '病床' in n), None)
 
 # 日付読み込み
 dates_map = {}
@@ -208,19 +268,22 @@ for col in range(2, ws.max_column + 1):
     if cell.value and isinstance(cell.value, datetime):
         dates_map[col] = cell.value.date()
 
-year_counts = Counter(d.year for d in dates_map.values())
-if selected_year == 'auto':
-    target_year = year_counts.most_common(1)[0][0]
-else:
-    target_year = int(selected_year)
-
 target_dates = sorted([d for d in dates_map.values() if d.year == target_year])
+if not target_dates:
+    available = sorted(set(d.year for d in dates_map.values()))
+    raise ValueError(f'{target_year}年のデータが見つかりません。このファイルに含まれる年: {available}')
 col_by_date  = {v: k for k, v in dates_map.items() if v.year == target_year}
 all_beds = list(ROOM_MAP.values())
 
 # セル色読み込み（data_only=Trueではスタイル保持されないため再読み込み）
 wb_style = openpyxl.load_workbook(io.BytesIO(bytes(file_bytes)))
-ws_style = next((wb_style[n] for n in wb_style.sheetnames if '病床' in n), None)
+ws_style = None
+for sname in wb_style.sheetnames:
+    if '病床' in sname and str(target_year) in sname:
+        ws_style = wb_style[sname]
+        break
+if ws_style is None:
+    ws_style = next((wb_style[n] for n in wb_style.sheetnames if '病床' in n), None)
 
 bed_day_color = {}
 for row_num, bed_id in ROOM_MAP.items():
