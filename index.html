@@ -43,7 +43,7 @@
 <div class="card">
   <h1>🏥 病床稼働率レポート生成</h1>
   <p class="subtitle">Excelファイルをアップロードして稼働率レポートを生成します</p>
-  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 3.4</p>
+  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 3.5</p>
 
   <div class="section">
     <label>① Excelファイルを選択</label>
@@ -647,7 +647,7 @@ wb_bytes = buf_pre.getvalue()
 month_list = list(months.keys())
 buf_in = io.BytesIO(wb_bytes)
 buf_fixed = io.BytesIO()
-with _zf.ZipFile(buf_in,'r') as zin, _zf.ZipFile(buf_fixed,'w',_zf.ZIP_DEFLATED) as zout:
+with _zf.ZipFile(buf_in,'r') as zin, _zf.ZipFile(buf_fixed,'w',_zf.ZIP_STORED) as zout:
     for item in zin.infolist():
         data = zin.read(item.filename)
         m = re.search(r'xl/charts/chart(\d+)\.xml', item.filename)
