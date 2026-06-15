@@ -43,7 +43,7 @@
 <div class="card">
   <h1>🏥 病床稼働率レポート生成</h1>
   <p class="subtitle">Excelファイルをアップロードして稼働率レポートを生成します</p>
-  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 4.1</p>
+  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 4.2</p>
 
   <div class="section">
     <label>① Excelファイルを選択</label>
@@ -295,15 +295,46 @@ def make_combo_xml(sheet_title, n_rows, adm_col, dis_col, occ_col, cat_col,
         '</legend><plotVisOnly val="1"/></chart></chartSpace>',
     ])
 
+from openpyxl.writer.excel import ExcelWriter as _EW
+_orig_wc = _EW._write_charts
+def _patched_wc(self):
+    seen = set()
+    for chart in self._charts:
+        if id(chart) in seen:
+            from openpyxl.utils.exceptions import InvalidFileException
+            raise InvalidFileException("Duplicate chart")
+        seen.add(id(chart))
+        if hasattr(chart, '_combo_xml_str'):
+            self._archive.writestr(chart.path[1:], chart._combo_xml_str.encode('utf-8'))
+            self.manifest.append(chart)
+        else:
+            from lxml.etree import tostring
+            self._archive.writestr(chart.path[1:], tostring(chart._write()))
+            self.manifest.append(chart)
+_EW._write_charts = _patched_wc
+
 class ComboChart(BarChart):
+    _COMBO = True
     def __init__(self, combo_xml_str, width=28, height=14):
         super().__init__()
-        self._combo_xml = combo_xml_str
+        self._combo_xml_str = combo_xml_str
         self.width = width
         self.height = height
-    def _write(self):
-        from lxml import etree
-        return etree.fromstring(self._combo_xml.encode('utf-8'))
+
+from openpyxl.writer.excel import ExcelWriter as _EW
+def _patched_wc(self):
+    if len(self._charts) != len(set(self._charts)):
+        from openpyxl.utils.exceptions import InvalidFileException
+        raise InvalidFileException("Same chart used twice")
+    for chart in self._charts:
+        if getattr(chart, '_COMBO', False):
+            self._archive.writestr(chart.path[1:], chart._combo_xml_str.encode('utf-8'))
+            self.manifest.append(chart)
+        else:
+            from lxml.etree import tostring
+            self._archive.writestr(chart.path[1:], tostring(chart._write()))
+            self.manifest.append(chart)
+_EW._write_charts = _patched_wc
 
 def make_combo_xml(sheet_title, n_rows, adm_col, dis_col, occ_col, cat_col,
                    title, x_title, left_max, right_max):
