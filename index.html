@@ -429,6 +429,7 @@ def make_month_sheet(ws, year, month, day_list):
     lc = ws.cell(row=OCC_ROW,column=1)
     lc.value='ベッド稼働率'; lc.font=Font(bold=True,size=9); lc.fill=fill(SUBHDR_BG)
     lc.alignment=Alignment(horizontal='center',vertical='center'); lc.border=bdr()
+    ws.cell(row=OCC_ROW,column=2).border=bdr()
     for j,dt in enumerate(day_list):
         pct = round(stats[str(dt)]['total']/TOTAL_BEDS*100,1)
         cell = ws.cell(row=OCC_ROW,column=3+j)
