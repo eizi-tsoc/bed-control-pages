@@ -43,7 +43,7 @@
 <div class="card">
   <h1>🏥 病床稼働率レポート生成</h1>
   <p class="subtitle">Excelファイルをアップロードして稼働率レポートを生成します</p>
-  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 4.2</p>
+  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 4.3</p>
 
   <div class="section">
     <label>① Excelファイルを選択</label>
@@ -535,17 +535,17 @@ for (year, month), day_list in months.items():
         ws_cd.cell(row=cur_row+1+j, column=4).value = round(s['total']/TOTAL_BEDS*100, 1)
     cur_row += len(day_list) + 2
 
-sum_start = cur_row
-ws_cd.cell(row=sum_start, column=1).value = '月'
-ws_cd.cell(row=sum_start, column=2).value = '入院数'
-ws_cd.cell(row=sum_start, column=3).value = '退院数'
-ws_cd.cell(row=sum_start, column=4).value = '稼働率(%)'
+# 月別サマリーデータはE~H列（固定・1行目から）に書き込む
+ws_cd.cell(row=1, column=5).value = '月'
+ws_cd.cell(row=1, column=6).value = '入院数'
+ws_cd.cell(row=1, column=7).value = '退院数'
+ws_cd.cell(row=1, column=8).value = '稼働率(%)'
 for mi, ((year, month), day_list) in enumerate(months.items()):
     sl = [stats[str(dt)] for dt in day_list]; n_m = len(sl)
-    ws_cd.cell(row=sum_start+1+mi, column=1).value = str(month)+'月'
-    ws_cd.cell(row=sum_start+1+mi, column=2).value = sum(s['admissions'] for s in sl)
-    ws_cd.cell(row=sum_start+1+mi, column=3).value = sum(s['discharges'] for s in sl)
-    ws_cd.cell(row=sum_start+1+mi, column=4).value = round(sum(s['total'] for s in sl)/(n_m*TOTAL_BEDS)*100, 1)
+    ws_cd.cell(row=2+mi, column=5).value = str(month)+'月'
+    ws_cd.cell(row=2+mi, column=6).value = sum(s['admissions'] for s in sl)
+    ws_cd.cell(row=2+mi, column=7).value = sum(s['discharges'] for s in sl)
+    ws_cd.cell(row=2+mi, column=8).value = round(sum(s['total'] for s in sl)/(n_m*TOTAL_BEDS)*100, 1)
 
 n_months = len(months)
 
@@ -613,7 +613,7 @@ sum_chart_row = wd_start + 10
 all_adm_m = [sum(stats[str(dt)]['admissions'] for dt in dl) for dl in months.values()]
 all_dis_m = [sum(stats[str(dt)]['discharges'] for dt in dl) for dl in months.values()]
 sum_lmax = max(max(all_adm_m), max(all_dis_m)) + 10
-sum_combo_xml = make_combo_xml('_data', n_months, 'B', 'C', 'D', 'A',
+sum_combo_xml = make_combo_xml('_data', n_months, 'F', 'G', 'H', 'E',
     str(target_year)+'年 月別稼働率・入退院数', '月', sum_lmax, 110)
 chart_sum = ComboChart(sum_combo_xml, width=26, height=14)
 ws_sum.add_chart(chart_sum,'A'+str(sum_chart_row))
@@ -698,7 +698,7 @@ def make_month_sheet(ws, year, month, day_list):
     cd_end   = cd_start + n
     adm_v = [stats[str(dt)]['admissions'] for dt in day_list]
     dis_v = [stats[str(dt)]['discharges'] for dt in day_list]
-    m_lmax = max(15, max(max(adm_v), max(dis_v))+3)
+    m_lmax = 25
     month_combo_xml = make_combo_xml('_data', n, 'B', 'C', 'D', 'A',
         str(year)+'年'+str(month)+'月 日別稼働率・入退院数', '日付', m_lmax, 110)
     chart_m = ComboChart(month_combo_xml, width=30, height=14)
