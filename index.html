@@ -43,7 +43,7 @@
 <div class="card">
   <h1>🏥 病床稼働率レポート生成</h1>
   <p class="subtitle">Excelファイルをアップロードして稼働率レポートを生成します</p>
-  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 2.3</p>
+  <p style="text-align:right;font-size:11px;color:#aaa;margin-top:-20px;margin-bottom:16px;">ver 2.4</p>
 
   <div class="section">
     <label>① Excelファイルを選択</label>
@@ -457,16 +457,17 @@ def make_month_sheet(ws, year, month, day_list, ws_cd=None, chart_data_offsets=N
     # ─── 月別複合グラフ（既存データを直接参照）───
     # 日付行(2行目)の3列目〜が日付、ADM_ROW/DIS_ROW/OCC_ROWの3列目〜が入退院数・稼働率
     # 棒グラフ（入退院数）- ADM_ROW, DIS_ROWを参照
-    # ─── 月別複合グラフ（非表示シートのデータを参照）───
+    # ─── 月別複合グラフ（非表示シートデータを参照）───
+    cd_start = chart_data_offsets[(year,month)]
+    cd_end   = cd_start + n
     CHART_START_ROW = OCC_ROW + 3
 
     bar_m=BarChart(); bar_m.type='col'; bar_m.grouping='clustered'
     bar_m.title=f'{year}年{month}月 日別稼働率・入退院数'
-    bar_m.y_axis.title='入退院数（件）'; bar_m.y_axis.axId=100; bar_m.y_axis.numFmt='0'
-    bar_m.x_axis.title='日付'; bar_m.style=2; bar_m.width=34; bar_m.height=16
-
-    cd_start = chart_data_offsets[(year,month)]
-    cd_end = cd_start + n
+    bar_m.y_axis.title='入退院数（件）'
+    bar_m.y_axis.numFmt='0'
+    bar_m.x_axis.title='日付'
+    bar_m.style=2; bar_m.width=30; bar_m.height=14
 
     data_adm_m=Reference(ws_cd,min_col=2,max_col=2,min_row=cd_start,max_row=cd_end)
     data_dis_m=Reference(ws_cd,min_col=3,max_col=3,min_row=cd_start,max_row=cd_end)
@@ -478,9 +479,12 @@ def make_month_sheet(ws, year, month, day_list, ws_cd=None, chart_data_offsets=N
     bar_m.series[1].spPr.solidFill='70AD47'
 
     line_m=LineChart()
-    line_m.y_axis.title='稼働率(%)'; line_m.y_axis.axId=200
-    line_m.y_axis.crosses='max'; line_m.y_axis.numFmt='0"%"'
-    line_m.y_axis.scaling.min=0; line_m.y_axis.scaling.max=100
+    line_m.y_axis.title='稼働率(%)'
+    line_m.y_axis.axId=200
+    line_m.y_axis.crosses='max'
+    line_m.y_axis.numFmt='0"%"'
+    line_m.y_axis.scaling.min=0
+    line_m.y_axis.scaling.max=100
     data_occ_m=Reference(ws_cd,min_col=4,max_col=4,min_row=cd_start,max_row=cd_end)
     line_m.add_data(data_occ_m,titles_from_data=True)
     line_m.series[0].spPr.ln.solidFill='4472C4'
@@ -578,14 +582,14 @@ bar_s.style = 2
 bar_s.width = 30
 bar_s.height = 16
 
-data_adm_s = Reference(ws_sum, min_col=3, max_col=3, min_row=SUM_CHART_ROW, max_row=SUM_CHART_ROW+n_months)
-data_dis_s = Reference(ws_sum, min_col=4, max_col=4, min_row=SUM_CHART_ROW, max_row=SUM_CHART_ROW+n_months)
-cats_s = Reference(ws_sum, min_col=1, min_row=SUM_CHART_ROW+1, max_row=SUM_CHART_ROW+n_months)
-bar_s.add_data(data_adm_s, titles_from_data=True)
-bar_s.add_data(data_dis_s, titles_from_data=True)
+data_adm_s=Reference(ws_sum,min_col=3,max_col=3,min_row=SUM_CHART_ROW,max_row=SUM_CHART_ROW+n_months)
+data_dis_s=Reference(ws_sum,min_col=4,max_col=4,min_row=SUM_CHART_ROW,max_row=SUM_CHART_ROW+n_months)
+cats_s=Reference(ws_sum,min_col=1,min_row=SUM_CHART_ROW+1,max_row=SUM_CHART_ROW+n_months)
+bar_s.add_data(data_adm_s,titles_from_data=True)
+bar_s.add_data(data_dis_s,titles_from_data=True)
 bar_s.set_categories(cats_s)
-bar_s.series[0].spPr.solidFill = 'ED7D31'
-bar_s.series[1].spPr.solidFill = '70AD47'
+bar_s.series[0].spPr.solidFill='ED7D31'
+bar_s.series[1].spPr.solidFill='70AD47'
 
 # 折れ線グラフ（月別稼働率）- 第2軸
 line_s = LineChart()
@@ -598,10 +602,10 @@ line_s.y_axis.scaling.max = 100
 
 data_occ_s = Reference(ws_sum, min_col=2, max_col=2, min_row=SUM_CHART_ROW, max_row=SUM_CHART_ROW+n_months)
 line_s.add_data(data_occ_s, titles_from_data=True)
-line_s.series[0].spPr.ln.solidFill = '4472C4'
-line_s.series[0].graphicalProperties.line.solidFill = '4472C4'
-line_s.series[0].graphicalProperties.line.width = 25000
-line_s.series[0].smooth = True
+line_s.series[0].spPr.ln.solidFill='4472C4'
+line_s.series[0].graphicalProperties.line.solidFill='4472C4'
+line_s.series[0].graphicalProperties.line.width=25000
+line_s.series[0].smooth=True
 
 bar_s += line_s
 ws_sum.add_chart(bar_s, 'A' + str(SUM_CHART_ROW + n_months + 3))
